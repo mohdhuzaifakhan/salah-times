@@ -39,3 +39,10 @@ yarn-error.*
 .vercel
 
 .env
+.config
+.expo
+.local
+.vscode
+attached_assets
+node_modules
+.replit

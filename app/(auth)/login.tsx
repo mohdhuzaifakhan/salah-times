@@ -32,12 +32,12 @@ export default function LoginScreen() {
     setLoading(true);
     const result = await login(email.trim(), password);
     setLoading(false);
-    if (result) {
+    if (result.user) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.dismissAll();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Login Failed", "Invalid email or password. Please try again.");
+      Alert.alert("Login Failed", result.error || "Invalid email or password.");
     }
   };
 
@@ -113,14 +113,14 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        <View style={styles.footer}>
+        {/* <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account?</Text>
           <Link href="/(auth)/register" asChild>
             <Pressable>
               <Text style={styles.linkText}>Register</Text>
             </Pressable>
           </Link>
-        </View>
+        </View> */}
       </ScrollView>
     </KeyboardAvoidingView>
   );

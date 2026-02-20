@@ -137,7 +137,7 @@ export default function EditTimetableScreen() {
           ))}
         </View>
 
-        <Text style={styles.hint}>Use 24-hour format (e.g. 05:10, 13:30, 18:45)</Text>
+        {/* <Text style={styles.hint}>Use 24-hour format (e.g. 05:10, 13:30, 18:45)</Text> */}
 
         <Pressable
           style={({ pressed }) => [

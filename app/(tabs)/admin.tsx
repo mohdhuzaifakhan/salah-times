@@ -87,7 +87,7 @@ export default function AdminScreen() {
             <Ionicons name="log-in-outline" size={20} color="#fff" />
             <Text style={styles.loginBtnText}>Login</Text>
           </Pressable>
-          <Pressable
+          {/* <Pressable
             style={({ pressed }) => [
               styles.registerBtn,
               pressed && styles.btnPressed,
@@ -98,7 +98,7 @@ export default function AdminScreen() {
             }}
           >
             <Text style={styles.registerBtnText}>Register New Masjid</Text>
-          </Pressable>
+          </Pressable> */}
         </View>
       </View>
     );

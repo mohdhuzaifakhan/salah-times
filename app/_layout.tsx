@@ -2,11 +2,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { View, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/lib/auth-context";
+import { AdBanner } from "@/components/AdBanner";
+import { AdManager } from "@/lib/ad-manager";
 import {
   useFonts,
   Poppins_400Regular,
@@ -56,6 +59,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
+      AdManager.initialize();
+      setTimeout(() => {
+        AdManager.showInterstitial();
+      }, 5000);
     }
   }, [fontsLoaded]);
 
@@ -65,9 +72,13 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <GestureHandlerRootView>
+          <GestureHandlerRootView style={styles.container}>
             <KeyboardProvider>
-              <RootLayoutNav />
+              <AdBanner />
+              <View style={styles.content}>
+                <RootLayoutNav />
+              </View>
+              {/* <AdBanner /> */}
             </KeyboardProvider>
           </GestureHandlerRootView>
         </AuthProvider>
@@ -75,3 +86,13 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+});
+

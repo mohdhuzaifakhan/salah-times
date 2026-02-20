@@ -112,7 +112,7 @@ export default function ExploreScreen() {
               <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
               <Text style={styles.emptyTitle}>No masjids found</Text>
               <Text style={styles.emptyText}>
-                Try a different search term
+                Try a different masjid name
               </Text>
             </View>
           }
