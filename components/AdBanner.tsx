@@ -5,7 +5,7 @@ import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads'
 
 // Use Test ID if not configured (user needs to replace with real ID)
 // For Android Emulators/Simulators, TestIds.BANNER is required to show ads.
-// const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-3940256099942544/6300978111';
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-6969484458852988/1465372597';
 
 export function AdBanner() {
     return (

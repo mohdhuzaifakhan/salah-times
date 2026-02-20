@@ -13,10 +13,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#FAFBF6"
     },
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.myapp"
-    },
     "android": {
       "package": "com.myapp",
       "adaptiveIcon": {
@@ -41,14 +37,21 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "androidAppId": "ca-app-pub-6969484458852988~5895572193"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://replit.com/"
+      },
+      "eas": {
+        "projectId": "cafc2b0c-71a4-4d2e-b51d-7fcd4cd29f3f"
+      }
     }
   }
 }

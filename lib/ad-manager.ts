@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
 // Use Test ID if not configured
-// const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-3940256099942544/1033173712';
+const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-6969484458852988/2879785796';
 
 const AD_CAP_KEY = '@ad_frequency_cap';
 const AD_DATE_KEY = '@ad_frequency_date';
