@@ -1,15 +1,11 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/lib/auth-context";
-import { AdBanner } from "@/components/AdBanner";
-import { AdManager } from "@/lib/ad-manager";
 import {
   useFonts,
   Poppins_400Regular,
@@ -18,7 +14,7 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   return (
@@ -58,11 +54,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
-      AdManager.initialize();
-      setTimeout(() => {
-        AdManager.showInterstitial();
-      }, 5000);
+      void SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
@@ -70,19 +62,15 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <GestureHandlerRootView style={styles.container}>
-            <KeyboardProvider>
-              <AdBanner />
-              <View style={styles.content}>
-                <RootLayoutNav />
-              </View>
-              {/* <AdBanner /> */}
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-        </AuthProvider>
-      </QueryClientProvider>
+      <AuthProvider>
+        <GestureHandlerRootView style={styles.container}>
+          <KeyboardProvider>
+            <View style={styles.content}>
+              <RootLayoutNav />
+            </View>
+          </KeyboardProvider>
+        </GestureHandlerRootView>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
@@ -95,4 +83,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

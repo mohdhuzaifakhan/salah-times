@@ -13,6 +13,7 @@ export interface Masjid {
   city: string;
   address: string;
   adminUid: string;
+  adminEmail?: string;
   timetable: Timetable;
   createdAt: number;
 }
@@ -20,8 +21,8 @@ export interface Masjid {
 export interface AdminUser {
   uid: string;
   email: string;
-  role: "admin";
-  masjidId: string;
+  role: "super_admin" | "masjid_admin";
+  masjidId?: string;
 }
 
 export const DEFAULT_TIMETABLE: Timetable = {

@@ -18,7 +18,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
 
 export default function RegisterScreen() {
-  const { register } = useAuth();
+  const { admin, register } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [masjidName, setMasjidName] = useState("");
@@ -27,18 +27,36 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  if (!admin || admin.role !== "super_admin") {
+    return (
+      <View style={styles.deniedContainer}>
+        <Text style={styles.deniedTitle}>Access denied</Text>
+        <Text style={styles.deniedText}>Only super admin can register masjid accounts.</Text>
+      </View>
+    );
+  }
+
   const handleRegister = async () => {
+    if (!admin || admin.role !== "super_admin") {
+      Alert.alert("Not Allowed", "Only super admin can register masjid accounts.");
+      return;
+    }
     if (!email.trim() || !password.trim() || !masjidName.trim() || !city.trim() || !address.trim()) {
       Alert.alert("Missing Fields", "Please fill in all fields.");
       return;
     }
-    if (password.length < 4) {
-      Alert.alert("Weak Password", "Password must be at least 4 characters.");
+    if (password.length < 6) {
+      Alert.alert("Weak Password", "Password must be at least 6 characters.");
       return;
     }
     setLoading(true);
     try {
-      await register(email.trim(), password, masjidName.trim(), city.trim(), address.trim());
+      const result = await register(email.trim(), password, masjidName.trim(), city.trim(), address.trim());
+      if (result.error) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Registration Failed", result.error);
+        return;
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Success", "Your masjid has been registered!", [
         { text: "OK", onPress: () => router.dismissAll() },
@@ -46,8 +64,9 @@ export default function RegisterScreen() {
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -65,7 +84,7 @@ export default function RegisterScreen() {
           <Ionicons name="add-circle" size={36} color={Colors.primary} />
         </View>
         <Text style={styles.title}>Register Masjid</Text>
-        <Text style={styles.subtitle}>Create an admin account for your masjid</Text>
+        <Text style={styles.subtitle}>Create masjid and masjid admin account</Text>
 
         <View style={styles.sectionLabel}>
           <Ionicons name="person-outline" size={16} color={Colors.primary} />
@@ -73,12 +92,12 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>Masjid Admin Email</Text>
           <View style={styles.inputWrap}>
             <Ionicons name="mail-outline" size={18} color={Colors.textMuted} />
             <TextInput
               style={styles.input}
-              placeholder="admin@masjid.com"
+              placeholder="imam@masjid.com"
               placeholderTextColor={Colors.textMuted}
               value={email}
               onChangeText={setEmail}
@@ -268,5 +287,24 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.7,
+  },
+  deniedContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.background,
+    paddingHorizontal: 24,
+  },
+  deniedTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 22,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  deniedText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: "center",
   },
 });

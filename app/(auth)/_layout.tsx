@@ -14,7 +14,12 @@ export default function AuthLayout() {
           gestureEnabled: false,
         }}
       />
-      {/* <Stack.Screen name="register" options={{ title: "Register" }} /> */}
+      <Stack.Screen
+        name="register"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

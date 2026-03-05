@@ -1,4 +1,4 @@
-import { Masjid, AdminUser, DEFAULT_TIMETABLE } from "./types";
+import { Masjid, AdminUser } from "./types";
 import { db } from "./firebaseConfig";
 import {
   collection,
@@ -9,7 +9,8 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where
+  where,
+  limit
 } from "firebase/firestore";
 
 const MASJIDS_COLLECTION = "masjids";
@@ -39,6 +40,42 @@ export async function getMasjidById(id: string): Promise<Masjid | null> {
     return null;
   } catch (error) {
     console.error("Error getting masjid:", error);
+    return null;
+  }
+}
+
+export async function getMasjidByAdminUid(adminUid: string): Promise<Masjid | null> {
+  try {
+    const q = query(
+      collection(db, MASJIDS_COLLECTION),
+      where("adminUid", "==", adminUid),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].data() as Masjid;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting masjid by admin uid:", error);
+    return null;
+  }
+}
+
+export async function getMasjidByAdminEmail(adminEmail: string): Promise<Masjid | null> {
+  try {
+    const q = query(
+      collection(db, MASJIDS_COLLECTION),
+      where("adminEmail", "==", adminEmail.toLowerCase()),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].data() as Masjid;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting masjid by admin email:", error);
     return null;
   }
 }
@@ -116,15 +153,24 @@ export async function deleteMasjid(id: string): Promise<boolean> {
 }
 
 // User Profile Management
-export async function createUserProfile(uid: string, email: string, masjidId: string) {
+export async function createUserProfile(
+  uid: string,
+  email: string,
+  role: AdminUser["role"],
+  masjidId?: string
+) {
   try {
     const userRef = doc(db, USERS_COLLECTION, uid);
     const userData: AdminUser = {
       uid,
       email,
-      role: "admin",
-      masjidId
+      role,
     };
+
+    if (masjidId) {
+      userData.masjidId = masjidId;
+    }
+
     await setDoc(userRef, userData);
     return userData;
   } catch (error) {
@@ -146,4 +192,3 @@ export async function getUserProfile(uid: string): Promise<AdminUser | null> {
     return null;
   }
 }
-

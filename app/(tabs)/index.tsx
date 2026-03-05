@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,9 +26,15 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadMasjids = useCallback(async () => {
-    const data = await getAllMasjids();
-    setMasjids(data);
-    setLoading(false);
+    try {
+      const data = await getAllMasjids();
+      setMasjids(data);
+    } catch (error) {
+      console.error("Failed to load masjids:", error);
+      Alert.alert("Error", "Failed to load masjids. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(

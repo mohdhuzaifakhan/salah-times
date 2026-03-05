@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useAuth } from "@/lib/auth-context";
 import { getMasjidById, updateMasjidTimetable } from "@/lib/store";
 import { Timetable, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 
@@ -30,22 +31,50 @@ const PRAYER_ICONS: Record<string, string> = {
 export default function EditTimetableScreen() {
   const { masjidId } = useLocalSearchParams<{ masjidId: string }>();
   const insets = useSafeAreaInsets();
+  const { admin } = useAuth();
   const [timetable, setTimetable] = useState<Timetable | null>(null);
   const [masjidName, setMasjidName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (masjidId) {
-      getMasjidById(masjidId).then((m) => {
-        if (m) {
-          setTimetable({ ...m.timetable });
-          setMasjidName(m.name);
+      (async () => {
+        try {
+          const m = await getMasjidById(masjidId);
+          if (!isMounted) return;
+          if (m) {
+            if (
+              admin?.role === "masjid_admin" &&
+              admin.masjidId &&
+              admin.masjidId !== m.id
+            ) {
+              Alert.alert("Not Allowed", "You can only update your own masjid timetable.");
+              router.back();
+              return;
+            }
+            setTimetable({ ...m.timetable });
+            setMasjidName(m.name);
+          }
+        } catch (error) {
+          console.error("Failed to load timetable:", error);
+          if (isMounted) {
+            Alert.alert("Error", "Unable to load timetable.");
+          }
+        } finally {
+          if (isMounted) setLoading(false);
         }
-        setLoading(false);
-      });
+      })();
+    } else {
+      setLoading(false);
     }
-  }, [masjidId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [admin?.masjidId, admin?.role, masjidId]);
 
   const updateTime = (prayer: keyof Timetable, value: string) => {
     if (!timetable) return;
@@ -59,6 +88,10 @@ export default function EditTimetableScreen() {
 
   const handleSave = async () => {
     if (!timetable || !masjidId) return;
+    if (admin?.role === "masjid_admin" && admin.masjidId !== masjidId) {
+      Alert.alert("Not Allowed", "You can only update your own masjid timetable.");
+      return;
+    }
 
     for (const prayer of PRAYER_ORDER) {
       const time = timetable[prayer];
@@ -74,12 +107,23 @@ export default function EditTimetableScreen() {
     }
 
     setSaving(true);
-    await updateMasjidTimetable(masjidId, timetable);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaving(false);
-    Alert.alert("Saved", "Prayer times have been updated.", [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+    try {
+      const updated = await updateMasjidTimetable(masjidId, timetable);
+      if (!updated) {
+        Alert.alert("Error", "Failed to save timetable. Please try again.");
+        return;
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Saved", "Prayer times have been updated.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      console.error("Failed to save timetable:", error);
+      Alert.alert("Error", "Something went wrong while saving timetable.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {

@@ -15,7 +15,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getMasjidById } from "@/lib/store";
+import { getAllMasjids, getMasjidById } from "@/lib/store";
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 
@@ -23,20 +23,51 @@ export default function AdminScreen() {
   const insets = useSafeAreaInsets();
   const { admin, isLoading, logout } = useAuth();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
+  const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [loadingMasjid, setLoadingMasjid] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (admin?.masjidId) {
-        setLoadingMasjid(true);
-        getMasjidById(admin.masjidId).then((m) => {
-          setMasjid(m);
-          setLoadingMasjid(false);
-        });
+      let isMounted = true;
+      setLoadingMasjid(true);
+
+      if (admin?.role === "super_admin") {
+        (async () => {
+          try {
+            const data = await getAllMasjids();
+            if (isMounted) {
+              setMasjids(data);
+              setMasjid(null);
+            }
+          } catch (error) {
+            console.error("Failed to load masjids:", error);
+            if (isMounted) setMasjids([]);
+          } finally {
+            if (isMounted) setLoadingMasjid(false);
+          }
+        })();
+      } else if (admin?.masjidId) {
+        (async () => {
+          try {
+            const m = await getMasjidById(admin.masjidId);
+            if (isMounted) setMasjid(m);
+          } catch (error) {
+            console.error("Failed to load masjid:", error);
+            if (isMounted) setMasjid(null);
+          } finally {
+            if (isMounted) setLoadingMasjid(false);
+          }
+        })();
       } else {
+        setMasjids([]);
         setMasjid(null);
+        setLoadingMasjid(false);
       }
-    }, [admin?.masjidId])
+
+      return () => {
+        isMounted = false;
+      };
+    }, [admin?.masjidId, admin?.role])
   );
 
   const handleLogout = () => {
@@ -122,13 +153,63 @@ export default function AdminScreen() {
           <View>
             <Text style={styles.adminGreeting}>Welcome back</Text>
             <Text style={styles.adminEmail}>{admin.email}</Text>
+            <Text style={styles.roleBadge}>
+              {admin.role === "super_admin" ? "Super Admin" : "Masjid Admin"}
+            </Text>
           </View>
           <Pressable onPress={handleLogout} style={styles.logoutBtn}>
             <Ionicons name="log-out-outline" size={22} color={Colors.error} />
           </Pressable>
         </View>
 
-        {masjid && (
+        {admin.role === "super_admin" ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [
+                styles.registerButton,
+                pressed && styles.btnPressed,
+              ]}
+              onPress={() => router.push("/(auth)/register")}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#fff" />
+              <Text style={styles.registerButtonText}>Register New Masjid</Text>
+            </Pressable>
+
+            {masjids.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No masjids registered</Text>
+                <Text style={styles.emptyText}>
+                  Use "Register New Masjid" to create the first masjid account.
+                </Text>
+              </View>
+            ) : (
+              masjids.map((item) => (
+                <View key={item.id} style={styles.superMasjidCard}>
+                  <View style={styles.superMasjidHeader}>
+                    <View style={styles.masjidInfoText}>
+                      <Text style={styles.masjidName}>{item.name}</Text>
+                      <Text style={styles.masjidLocation}>
+                        {item.address}, {item.city}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.editBtn}
+                      onPress={() => {
+                        router.push({
+                          pathname: "/edit-timetable",
+                          params: { masjidId: item.id },
+                        });
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#fff" />
+                      <Text style={styles.editBtnText}>Edit</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
+          </>
+        ) : masjid ? (
           <>
             <View style={styles.masjidInfoCard}>
               <View style={styles.masjidInfoHeader}>
@@ -169,6 +250,13 @@ export default function AdminScreen() {
 
             <PrayerTimesCard timetable={masjid.timetable} />
           </>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No masjid account found</Text>
+            <Text style={styles.emptyText}>
+              Contact super admin to assign your account to a masjid.
+            </Text>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -269,6 +357,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
   },
+  roleBadge: {
+    marginTop: 4,
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.primary,
+  },
   logoutBtn: {
     width: 42,
     height: 42,
@@ -300,6 +394,20 @@ const styles = StyleSheet.create({
   },
   masjidInfoText: {
     flex: 1,
+  },
+  superMasjidCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  superMasjidHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   masjidName: {
     fontFamily: "Poppins_700Bold",
@@ -342,5 +450,38 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
     color: "#fff",
+  },
+  registerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  registerButtonText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: "#fff",
+  },
+  emptyState: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    padding: 16,
+  },
+  emptyTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
 });

@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, Link } from "expo-router";
+import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
@@ -113,14 +113,6 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        {/* <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
-          <Link href="/(auth)/register" asChild>
-            <Pressable>
-              <Text style={styles.linkText}>Register</Text>
-            </Pressable>
-          </Link>
-        </View> */}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -205,21 +197,5 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.7,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 4,
-    marginTop: 8,
-  },
-  footerText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  linkText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
-    color: Colors.primary,
   },
 });

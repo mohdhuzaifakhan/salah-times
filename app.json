@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "salah-times",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,41 +14,29 @@
       "backgroundColor": "#FAFBF6"
     },
     "android": {
-      "package": "com.myapp",
+      "package": "com.myapp.salahtimes",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.myapp.salahtimes",
+      "buildNumber": "1",
+      "supportsTablet": true
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
-      "expo-font",
-      "expo-web-browser",
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-6969484458852988~5895572193"
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "router": {
-        "origin": "https://replit.com/"
-      },
       "eas": {
         "projectId": "cafc2b0c-71a4-4d2e-b51d-7fcd4cd29f3f"
       }

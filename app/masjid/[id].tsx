@@ -33,23 +33,42 @@ export default function MasjidDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (id) {
-      getMasjidById(id).then((m) => {
-        setMasjid(m);
-        setLoading(false);
-      });
+      (async () => {
+        try {
+          const m = await getMasjidById(id);
+          if (isMounted) setMasjid(m);
+        } catch (error) {
+          console.error("Failed to load masjid details:", error);
+          if (isMounted) setMasjid(null);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      })();
+    } else {
+      setLoading(false);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const handleShare = async () => {
     if (!masjid) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const times = PRAYER_ORDER
-      .map((p) => `${PRAYER_NAMES[p]}: ${formatTime(masjid.timetable[p])}`)
-      .join("\n");
-    await Share.share({
-      message: `${masjid.name}\n${masjid.address}, ${masjid.city}\n\nPrayer Times:\n${times}`,
-    });
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const times = PRAYER_ORDER
+        .map((p) => `${PRAYER_NAMES[p]}: ${formatTime(masjid.timetable[p])}`)
+        .join("\n");
+      await Share.share({
+        message: `${masjid.name}\n${masjid.address}, ${masjid.city}\n\nPrayer Times:\n${times}`,
+      });
+    } catch (error) {
+      console.error("Share failed:", error);
+    }
   };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
