@@ -38,8 +38,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "cafc2b0c-71a4-4d2e-b51d-7fcd4cd29f3f"
+        "projectId": "8227eac5-bd60-4799-b98a-9db1098326b8"
       }
-    }
+    },
+    "owner": "iram_khan"
   }
 }
