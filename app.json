@@ -14,7 +14,7 @@
       "backgroundColor": "#FAFBF6"
     },
     "android": {
-      "package": "com.myapp.salahtimes",
+      "package": "com.huzaifa.salahtimes",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -22,7 +22,7 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "com.myapp.salahtimes",
+      "bundleIdentifier": "com.huzaifa.salahtimes",
       "buildNumber": "1",
       "supportsTablet": true
     },
