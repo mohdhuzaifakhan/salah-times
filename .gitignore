@@ -92,4 +92,5 @@ pepk.jar
 encrypted_private_key.zip
 encryption_public_key.pem
 credentials.json
+eas.json
 # @end expo-cli
