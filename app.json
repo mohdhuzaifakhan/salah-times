@@ -36,11 +36,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "owner": "iram_khan",
     "extra": {
       "eas": {
         "projectId": "8227eac5-bd60-4799-b98a-9db1098326b8"
       }
-    },
-    "owner": "iram_khan"
+    }
   }
 }

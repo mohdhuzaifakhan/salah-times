@@ -1,4 +1,4 @@
-import { Masjid, AdminUser } from "./types";
+import { Masjid, AdminUser, AppEvent } from "./types";
 import { db } from "./firebaseConfig";
 import {
   collection,
@@ -15,6 +15,7 @@ import {
 
 const MASJIDS_COLLECTION = "masjids";
 const USERS_COLLECTION = "users";
+const EVENTS_COLLECTION = "events";
 
 export async function getAllMasjids(): Promise<Masjid[]> {
   try {
@@ -192,3 +193,70 @@ export async function getUserProfile(uid: string): Promise<AdminUser | null> {
     return null;
   }
 }
+
+// Events Management
+export async function createEvent(data: Omit<AppEvent, "id" | "createdAt">): Promise<AppEvent> {
+  try {
+    const newEventRef = doc(collection(db, EVENTS_COLLECTION));
+    const newEvent: AppEvent = {
+      ...data,
+      id: newEventRef.id,
+      createdAt: Date.now(),
+    };
+
+    await setDoc(newEventRef, newEvent);
+    return newEvent;
+  } catch (error) {
+    console.error("Error creating event:", error);
+    throw error;
+  }
+}
+
+export async function getGlobalEvents(): Promise<AppEvent[]> {
+  try {
+    const q = query(
+      collection(db, EVENTS_COLLECTION),
+      where("masjidId", "==", "global"),
+      where("endDate", ">", Date.now())
+    );
+    const querySnapshot = await getDocs(q);
+    const events: AppEvent[] = [];
+    querySnapshot.forEach((doc) => {
+      events.push(doc.data() as AppEvent);
+    });
+    return events.sort((a, b) => a.endDate - b.endDate);
+  } catch (error) {
+    console.error("Error getting global events:", error);
+    return [];
+  }
+}
+
+export async function getMasjidEvents(masjidId: string): Promise<AppEvent[]> {
+  try {
+    const q = query(
+      collection(db, EVENTS_COLLECTION),
+      where("masjidId", "==", masjidId),
+      where("endDate", ">", Date.now())
+    );
+    const querySnapshot = await getDocs(q);
+    const events: AppEvent[] = [];
+    querySnapshot.forEach((doc) => {
+      events.push(doc.data() as AppEvent);
+    });
+    return events.sort((a, b) => a.endDate - b.endDate);
+  } catch (error) {
+    console.error("Error getting masjid events:", error);
+    return [];
+  }
+}
+
+export async function deleteEvent(id: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, EVENTS_COLLECTION, id));
+    return true;
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    return false;
+  }
+}
+

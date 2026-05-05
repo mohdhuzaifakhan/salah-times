@@ -51,3 +51,13 @@ export const PRAYER_ORDER: (keyof Timetable)[] = [
   "isha",
   "jummah",
 ];
+
+export interface AppEvent {
+  id: string;
+  title: string;
+  description: string;
+  endDate: number;
+  masjidId: string | 'global';
+  createdBy: string;
+  createdAt: number;
+}

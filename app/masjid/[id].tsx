@@ -14,9 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { getMasjidById } from "@/lib/store";
-import { Masjid, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
+import { getMasjidById, getMasjidEvents } from "@/lib/store";
+import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
+import { EventCard } from "@/components/EventCard";
 
 function formatTime(time: string): string {
   const [h, m] = time.split(":");
@@ -30,6 +31,7 @@ export default function MasjidDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
+  const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,11 +40,20 @@ export default function MasjidDetailScreen() {
     if (id) {
       (async () => {
         try {
-          const m = await getMasjidById(id);
-          if (isMounted) setMasjid(m);
+          const [m, e] = await Promise.all([
+            getMasjidById(id),
+            getMasjidEvents(id)
+          ]);
+          if (isMounted) {
+            setMasjid(m);
+            setEvents(e);
+          }
         } catch (error) {
           console.error("Failed to load masjid details:", error);
-          if (isMounted) setMasjid(null);
+          if (isMounted) {
+            setMasjid(null);
+            setEvents([]);
+          }
         } finally {
           if (isMounted) setLoading(false);
         }
@@ -127,6 +138,15 @@ export default function MasjidDetailScreen() {
             <Text style={styles.cityText}>{masjid.city}</Text>
           </View>
         </View>
+
+        {events.length > 0 && (
+          <View style={styles.eventsSection}>
+            <Text style={styles.sectionTitle}>Announcements</Text>
+            {events.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Prayer Timetable</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
@@ -215,6 +235,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: Colors.text,
     marginBottom: 12,
+  },
+  eventsSection: {
+    marginBottom: 20,
   },
   errorText: {
     fontFamily: "Poppins_500Medium",

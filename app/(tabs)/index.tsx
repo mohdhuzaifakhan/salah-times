@@ -14,24 +14,30 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import Colors from "@/constants/colors";
-import { Masjid } from "@/lib/types";
-import { getAllMasjids } from "@/lib/store";
+import { Masjid, AppEvent } from "@/lib/types";
+import { getAllMasjids, getGlobalEvents } from "@/lib/store";
 import { MasjidCard } from "@/components/MasjidCard";
+import { EventCard } from "@/components/EventCard";
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const [masjids, setMasjids] = useState<Masjid[]>([]);
+  const [events, setEvents] = useState<AppEvent[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadMasjids = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const data = await getAllMasjids();
-      setMasjids(data);
+      const [masjidsData, eventsData] = await Promise.all([
+        getAllMasjids(),
+        getGlobalEvents(),
+      ]);
+      setMasjids(masjidsData);
+      setEvents(eventsData);
     } catch (error) {
-      console.error("Failed to load masjids:", error);
-      Alert.alert("Error", "Failed to load masjids. Please try again.");
+      console.error("Failed to load data:", error);
+      Alert.alert("Error", "Failed to load data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -39,13 +45,13 @@ export default function ExploreScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadMasjids();
-    }, [loadMasjids])
+      loadData();
+    }, [loadData])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadMasjids();
+    await loadData();
     setRefreshing(false);
   };
 
@@ -114,6 +120,15 @@ export default function ExploreScreen() {
               tintColor={Colors.primary}
             />
           }
+          ListHeaderComponent={
+            events.length > 0 ? (
+              <View style={styles.eventsContainer}>
+                {events.map(event => (
+                  <EventCard key={event.id} event={event} />
+                ))}
+              </View>
+            ) : undefined
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
@@ -173,6 +188,9 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: 20,
+  },
+  eventsContainer: {
+    marginBottom: 16,
   },
   centered: {
     flex: 1,

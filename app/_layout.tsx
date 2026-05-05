@@ -3,7 +3,6 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/lib/auth-context";
 import {
@@ -64,11 +63,9 @@ export default function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <GestureHandlerRootView style={styles.container}>
-          <KeyboardProvider>
-            <View style={styles.content}>
-              <RootLayoutNav />
-            </View>
-          </KeyboardProvider>
+          <View style={styles.content}>
+            <RootLayoutNav />
+          </View>
         </GestureHandlerRootView>
       </AuthProvider>
     </ErrorBoundary>

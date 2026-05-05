@@ -175,6 +175,18 @@ export default function AdminScreen() {
               <Text style={styles.registerButtonText}>Register New Masjid</Text>
             </Pressable>
 
+            <Pressable
+              style={({ pressed }) => [
+                styles.registerButton,
+                { backgroundColor: Colors.accent, marginTop: -4 },
+                pressed && styles.btnPressed,
+              ]}
+              onPress={() => router.push({ pathname: "/manage-events", params: { masjidId: "global" } })}
+            >
+              <Ionicons name="megaphone-outline" size={18} color="#fff" />
+              <Text style={styles.registerButtonText}>Manage Global Events</Text>
+            </Pressable>
+
             {masjids.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No masjids registered</Text>
@@ -249,6 +261,27 @@ export default function AdminScreen() {
             </View>
 
             <PrayerTimesCard timetable={masjid.timetable} />
+
+            <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+              <Text style={styles.sectionTitle}>Masjid Events</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.editBtn,
+                  { backgroundColor: Colors.accent },
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push({
+                    pathname: "/manage-events",
+                    params: { masjidId: masjid.id },
+                  });
+                }}
+              >
+                <Ionicons name="megaphone-outline" size={16} color="#fff" />
+                <Text style={styles.editBtnText}>Manage</Text>
+              </Pressable>
+            </View>
           </>
         ) : (
           <View style={styles.emptyState}>
