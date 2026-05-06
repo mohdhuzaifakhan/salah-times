@@ -216,13 +216,16 @@ export async function getGlobalEvents(): Promise<AppEvent[]> {
   try {
     const q = query(
       collection(db, EVENTS_COLLECTION),
-      where("masjidId", "==", "global"),
-      where("endDate", ">", Date.now())
+      where("masjidId", "==", "global")
     );
     const querySnapshot = await getDocs(q);
     const events: AppEvent[] = [];
+    const now = Date.now();
     querySnapshot.forEach((doc) => {
-      events.push(doc.data() as AppEvent);
+      const data = doc.data() as AppEvent;
+      if (data.endDate > now) {
+        events.push(data);
+      }
     });
     return events.sort((a, b) => a.endDate - b.endDate);
   } catch (error) {
@@ -235,13 +238,16 @@ export async function getMasjidEvents(masjidId: string): Promise<AppEvent[]> {
   try {
     const q = query(
       collection(db, EVENTS_COLLECTION),
-      where("masjidId", "==", masjidId),
-      where("endDate", ">", Date.now())
+      where("masjidId", "==", masjidId)
     );
     const querySnapshot = await getDocs(q);
     const events: AppEvent[] = [];
+    const now = Date.now();
     querySnapshot.forEach((doc) => {
-      events.push(doc.data() as AppEvent);
+      const data = doc.data() as AppEvent;
+      if (data.endDate > now) {
+        events.push(data);
+      }
     });
     return events.sort((a, b) => a.endDate - b.endDate);
   } catch (error) {

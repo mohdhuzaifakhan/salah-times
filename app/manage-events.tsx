@@ -27,7 +27,8 @@ const EXPIRY_OPTIONS = [
 ];
 
 export default function ManageEventsScreen() {
-  const { masjidId } = useLocalSearchParams<{ masjidId: string }>();
+  const params = useLocalSearchParams();
+  const masjidId = typeof params.masjidId === "string" ? params.masjidId : (Array.isArray(params.masjidId) ? params.masjidId[0] : "global");
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
   
