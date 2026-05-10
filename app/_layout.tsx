@@ -2,9 +2,14 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/lib/auth-context";
+import { QuranProvider } from "@/lib/quran/context";
+import { HadithProvider } from "@/lib/hadith/context";
+import { CalendarProvider } from "@/lib/calendar/context";
+import { LanguageProvider } from "@/lib/language-context";
 import {
   useFonts,
   Poppins_400Regular,
@@ -12,12 +17,13 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
+import Colors from "@/constants/colors";
 
 void SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerShown: false, headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="masjid/[id]"
@@ -67,12 +73,21 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
+      <StatusBar style="dark" backgroundColor={Colors.background} />
       <AuthProvider>
-        <GestureHandlerRootView style={styles.container}>
-          <View style={styles.content}>
-            <RootLayoutNav />
-          </View>
-        </GestureHandlerRootView>
+        <LanguageProvider>
+          <QuranProvider>
+            <HadithProvider>
+              <CalendarProvider>
+                <GestureHandlerRootView style={styles.container}>
+                  <View style={styles.content}>
+                    <RootLayoutNav />
+                  </View>
+                </GestureHandlerRootView>
+              </CalendarProvider>
+            </HadithProvider>
+          </QuranProvider>
+        </LanguageProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

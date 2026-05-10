@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { useLanguage } from "@/lib/language-context";
 import {
   StyleSheet,
   Text,
@@ -20,6 +21,7 @@ import { MasjidCard } from "@/components/MasjidCard";
 import { EventCard } from "@/components/EventCard";
 
 export default function ExploreScreen() {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
@@ -66,15 +68,15 @@ export default function ExploreScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
       <View style={styles.headerSection}>
-        <Text style={styles.greeting}>Assalamu Alaikum</Text>
-        <Text style={styles.title}>Find Prayer Times</Text>
+        <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
+        <Text style={styles.title}>{t('find_prayer_times')}</Text>
       </View>
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={Colors.textMuted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search masjids or cities..."
-          placeholderTextColor={Colors.textMuted}
+          placeholder={t('search_masjids')}
+          placeholderTextColor="#7D8A8A"
           value={search}
           onChangeText={setSearch}
           autoCapitalize="none"

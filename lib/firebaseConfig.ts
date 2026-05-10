@@ -1,6 +1,7 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function requiredEnv(
   name: string,
@@ -12,7 +13,7 @@ function requiredEnv(
   return value;
 }
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: requiredEnv(
     "EXPO_PUBLIC_FIREBASE_API_KEY",
     process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -41,9 +42,16 @@ const firebaseConfig = {
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
+
+let auth: any;
+try {
+  auth = initializeAuth(app, {
+    persistence: (getReactNativePersistence as any)(AsyncStorage)
+  });
+} catch (e) {
+  auth = getAuth(app);
+}
 
 const db = getFirestore(app);
 
-export { auth, db };
-export { firebaseConfig };
+export { app, auth, db };

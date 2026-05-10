@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useLanguage } from "@/lib/language-context";
 import { getMasjidById, getMasjidEvents } from "@/lib/store";
 import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
@@ -28,6 +29,7 @@ function formatTime(time: string): string {
 }
 
 export default function MasjidDetailScreen() {
+  const { t } = useLanguage();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
@@ -141,14 +143,14 @@ export default function MasjidDetailScreen() {
 
         {events.length > 0 && (
           <View style={styles.eventsSection}>
-            <Text style={styles.sectionTitle}>Announcements</Text>
+            <Text style={styles.sectionTitle}>{t('announcements')}</Text>
             {events.map((event) => (
               <EventCard key={event.id} event={event} />
             ))}
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Prayer Timetable</Text>
+        <Text style={styles.sectionTitle}>{t('prayer_timetable')}</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
       </ScrollView>
     </View>

@@ -11,12 +11,28 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "moon.stars", selected: "moon.stars.fill" }} />
-        <Label>Explore</Label>
+        <Icon sf={{ default: "timer", selected: "timer.fill" }} />
+        <Label>Prayer Times</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="quran">
+        <Icon sf={{ default: "book", selected: "book.fill" }} />
+        <Label>Quran</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="hadith">
+        <Icon sf={{ default: "books.vertical", selected: "books.vertical.fill" }} />
+        <Label>Hadith</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="calendar">
+        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
+        <Label>Calendar</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="admin">
         <Icon sf={{ default: "person.badge.key", selected: "person.badge.key.fill" }} />
         <Label>My Masjid</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
+        <Label>Settings</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -66,9 +82,36 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Explore",
+          title: "Prayer Times",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="moon" size={size} color={color} />
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="quran"
+        options={{
+          title: "Quran",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="book-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="hadith"
+        options={{
+          title: "Hadith",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="library-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: "Calendar",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
@@ -77,7 +120,16 @@ function ClassicTabLayout() {
         options={{
           title: "My Masjid",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="key" size={size} color={color} />
+            <Ionicons name="key-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
