@@ -12,6 +12,7 @@ import {
   where,
   limit
 } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const MASJIDS_COLLECTION = "masjids";
 const USERS_COLLECTION = "users";
@@ -263,6 +264,43 @@ export async function deleteEvent(id: string): Promise<boolean> {
   } catch (error) {
     console.error("Error deleting event:", error);
     return false;
+  }
+}
+
+export async function getEventById(id: string): Promise<AppEvent | null> {
+  try {
+    const docRef = doc(db, EVENTS_COLLECTION, id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as AppEvent;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting event:", error);
+    return null;
+  }
+}
+
+const PRIMARY_MASJID_KEY = "@primary_masjid_id";
+
+export async function getPrimaryMasjidId(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(PRIMARY_MASJID_KEY);
+  } catch (error) {
+    console.error("Error getting primary masjid id:", error);
+    return null;
+  }
+}
+
+export async function savePrimaryMasjidId(id: string | null): Promise<void> {
+  try {
+    if (id) {
+      await AsyncStorage.setItem(PRIMARY_MASJID_KEY, id);
+    } else {
+      await AsyncStorage.removeItem(PRIMARY_MASJID_KEY);
+    }
+  } catch (error) {
+    console.error("Error saving primary masjid id:", error);
   }
 }
 

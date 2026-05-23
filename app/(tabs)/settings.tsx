@@ -1,5 +1,7 @@
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useQuran } from '@/lib/quran/context';
 import { useHadith } from '@/lib/hadith/context';
@@ -7,11 +9,57 @@ import { useLanguage } from '@/lib/language-context';
 import { Language } from '@/lib/translations';
 import { auth } from '@/lib/firebaseConfig';
 import { signOut } from 'firebase/auth';
+import { getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from '@/lib/store';
+import { clearScheduledNotifications } from '@/lib/notifications';
 
 export default function SettingsScreen() {
   const { preferences: quranPrefs, updatePreferences: updateQuranPrefs } = useQuran();
   const { preferences: hadithPrefs, updatePreferences: updateHadithPrefs } = useHadith();
   const { language, setLanguage, t } = useLanguage();
+
+  const [primaryMasjidName, setPrimaryMasjidName] = useState<string | null>(null);
+  const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
+
+  const loadPrimaryMasjid = useCallback(async () => {
+    try {
+      const id = await getPrimaryMasjidId();
+      setPrimaryMasjidId(id);
+      if (id) {
+        const msjd = await getMasjidById(id);
+        setPrimaryMasjidName(msjd ? msjd.name : "Unknown Masjid");
+      } else {
+        setPrimaryMasjidName(null);
+      }
+    } catch (error) {
+      console.error("Failed to load settings primary masjid:", error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPrimaryMasjid();
+    }, [loadPrimaryMasjid])
+  );
+
+  const handleUnlinkPrimary = async () => {
+    Alert.alert(
+      "Unlink Primary Masjid",
+      "Are you sure you want to remove your primary masjid? You will no longer see its quick access dashboard on the Home tab.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            await savePrimaryMasjidId(null);
+            setPrimaryMasjidId(null);
+            setPrimaryMasjidName(null);
+            await clearScheduledNotifications();
+          },
+        },
+      ]
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -183,6 +231,21 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('app_section')}</Text>
+          <SettingItem 
+            icon="star-outline"
+            title="Primary Masjid"
+            subtitle={primaryMasjidName || "None (Select from Explore)"}
+            onPress={primaryMasjidId ? handleUnlinkPrimary : undefined}
+            rightElement={
+              primaryMasjidId ? (
+                <TouchableOpacity onPress={handleUnlinkPrimary} style={{ padding: 4 }}>
+                  <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              )
+            }
+          />
           <SettingItem 
             icon="notifications-outline"
             title={t('notifications')}

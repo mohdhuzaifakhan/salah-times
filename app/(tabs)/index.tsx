@@ -10,15 +10,25 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import Colors from "@/constants/colors";
 import { Masjid, AppEvent } from "@/lib/types";
-import { getAllMasjids, getGlobalEvents } from "@/lib/store";
+import { getAllMasjids, getGlobalEvents, getPrimaryMasjidId, getMasjidById } from "@/lib/store";
 import { MasjidCard } from "@/components/MasjidCard";
 import { EventCard } from "@/components/EventCard";
+
+function formatTimeCompact(time: string): string {
+  if (!time) return "";
+  const [h, m] = time.split(":");
+  const hour = parseInt(h, 10);
+  const displayHour = hour % 12 || 12;
+  const ampm = hour >= 12 ? "PM" : "AM";
+  return `${displayHour}:${m} ${ampm}`;
+}
 
 export default function ExploreScreen() {
   const { t } = useLanguage();
@@ -28,15 +38,25 @@ export default function ExploreScreen() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [primaryMasjid, setPrimaryMasjid] = useState<Masjid | null>(null);
+  const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const [masjidsData, eventsData] = await Promise.all([
+      const [masjidsData, eventsData, primaryId] = await Promise.all([
         getAllMasjids(),
         getGlobalEvents(),
+        getPrimaryMasjidId(),
       ]);
       setMasjids(masjidsData);
       setEvents(eventsData);
+      setPrimaryMasjidId(primaryId);
+      if (primaryId) {
+        const primaryData = masjidsData.find((m) => m.id === primaryId) || (await getMasjidById(primaryId));
+        setPrimaryMasjid(primaryData);
+      } else {
+        setPrimaryMasjid(null);
+      }
     } catch (error) {
       console.error("Failed to load data:", error);
       Alert.alert("Error", "Failed to load data. Please try again.");
@@ -102,6 +122,7 @@ export default function ExploreScreen() {
           renderItem={({ item }) => (
             <MasjidCard
               masjid={item}
+              isPrimary={item.id === primaryMasjidId}
               onPress={() =>
                 router.push({
                   pathname: "/masjid/[id]",
@@ -123,13 +144,67 @@ export default function ExploreScreen() {
             />
           }
           ListHeaderComponent={
-            events.length > 0 ? (
-              <View style={styles.eventsContainer}>
-                {events.map(event => (
-                  <EventCard key={event.id} event={event} />
-                ))}
-              </View>
-            ) : undefined
+            <View style={{ marginBottom: 8 }}>
+              {primaryMasjid ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryCard,
+                    pressed && styles.primaryCardPressed,
+                  ]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/masjid/[id]",
+                      params: { id: primaryMasjid.id },
+                    })
+                  }
+                >
+                  <View style={styles.primaryCardHeader}>
+                    <View style={styles.primaryCardIconWrap}>
+                      <Ionicons name="star" size={16} color="#fff" />
+                    </View>
+                    <View style={styles.primaryCardInfo}>
+                      <Text style={styles.primaryCardLabel}>YOUR PRIMARY MASJID</Text>
+                      <Text style={styles.primaryCardName} numberOfLines={1}>
+                        {primaryMasjid.name}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  </View>
+
+                  <View style={styles.primaryCardTimesRow}>
+                    {[
+                      { key: "fajr", label: "Fajr" },
+                      { key: "dhuhr", label: "Dhuhr" },
+                      { key: "asr", label: "Asr" },
+                      { key: "maghrib", label: "Maghrib" },
+                      { key: "isha", label: "Isha" },
+                    ].map((item) => (
+                      <View key={item.key} style={styles.primaryCardTimeItem}>
+                        <Text style={styles.primaryCardTimeLabel}>{item.label}</Text>
+                        <Text style={styles.primaryCardTimeValue}>
+                          {formatTimeCompact(
+                            primaryMasjid.timetable[item.key as keyof typeof primaryMasjid.timetable]
+                          )}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </Pressable>
+              ) : null}
+
+              {events.length > 0 ? (
+                <View style={styles.eventsContainer}>
+                  <Text style={styles.subSectionTitle}>Announcements</Text>
+                  {events.map((event) => (
+                    <EventCard key={event.id} event={event} />
+                  ))}
+                </View>
+              ) : null}
+
+              {filtered.length > 0 ? (
+                <Text style={styles.subSectionTitle}>Explore Masjids</Text>
+              ) : null}
+            </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -214,5 +289,80 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: Colors.textMuted,
+  },
+  subSectionTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  primaryCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  primaryCardPressed: {
+    transform: [{ scale: 0.99 }],
+    opacity: 0.95,
+  },
+  primaryCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  primaryCardIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryCardInfo: {
+    flex: 1,
+  },
+  primaryCardLabel: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 10,
+    color: Colors.accent,
+    letterSpacing: 1,
+  },
+  primaryCardName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 16,
+    color: Colors.text,
+    marginTop: -1,
+  },
+  primaryCardTimesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  primaryCardTimeItem: {
+    alignItems: "center",
+    gap: 2,
+  },
+  primaryCardTimeLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  primaryCardTimeValue: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
   },
 });

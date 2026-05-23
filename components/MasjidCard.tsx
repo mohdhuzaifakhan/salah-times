@@ -35,9 +35,11 @@ function getNextPrayer(timetable: Masjid["timetable"]): { name: string; time: st
 export function MasjidCard({
   masjid,
   onPress,
+  isPrimary,
 }: {
   masjid: Masjid;
   onPress: () => void;
+  isPrimary?: boolean;
 }) {
   const next = getNextPrayer(masjid.timetable);
 
@@ -57,9 +59,14 @@ export function MasjidCard({
           <Ionicons name="moon" size={20} color={Colors.primary} />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.name} numberOfLines={1}>
-            {masjid.name}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+            <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>
+              {masjid.name}
+            </Text>
+            {isPrimary && (
+              <Ionicons name="star" size={15} color={Colors.accent} style={{ marginRight: 4 }} />
+            )}
+          </View>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
             <Text style={styles.city} numberOfLines={1}>

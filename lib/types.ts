@@ -60,4 +60,5 @@ export interface AppEvent {
   masjidId: string | 'global';
   createdBy: string;
   createdAt: number;
+  imageUrl?: string;
 }

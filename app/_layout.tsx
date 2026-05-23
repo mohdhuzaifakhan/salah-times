@@ -51,6 +51,12 @@ function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="event/[id]"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

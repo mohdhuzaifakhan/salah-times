@@ -15,9 +15,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useLanguage } from "@/lib/language-context";
-import { getMasjidById, getMasjidEvents } from "@/lib/store";
+import { getMasjidById, getMasjidEvents, getPrimaryMasjidId, savePrimaryMasjidId } from "@/lib/store";
 import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
+import { schedulePrimaryMasjidNotifications, clearScheduledNotifications } from "@/lib/notifications";
 import { EventCard } from "@/components/EventCard";
 
 function formatTime(time: string): string {
@@ -35,6 +36,7 @@ export default function MasjidDetailScreen() {
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPrimary, setIsPrimary] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -42,19 +44,22 @@ export default function MasjidDetailScreen() {
     if (id) {
       (async () => {
         try {
-          const [m, e] = await Promise.all([
+          const [m, e, primaryId] = await Promise.all([
             getMasjidById(id),
-            getMasjidEvents(id)
+            getMasjidEvents(id),
+            getPrimaryMasjidId()
           ]);
           if (isMounted) {
             setMasjid(m);
             setEvents(e);
+            setIsPrimary(primaryId === id);
           }
         } catch (error) {
           console.error("Failed to load masjid details:", error);
           if (isMounted) {
             setMasjid(null);
             setEvents([]);
+            setIsPrimary(false);
           }
         } finally {
           if (isMounted) setLoading(false);
@@ -68,6 +73,25 @@ export default function MasjidDetailScreen() {
       isMounted = false;
     };
   }, [id]);
+
+  const togglePrimary = async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (isPrimary) {
+        await savePrimaryMasjidId(null);
+        setIsPrimary(false);
+        await clearScheduledNotifications();
+      } else {
+        await savePrimaryMasjidId(id);
+        setIsPrimary(true);
+        if (masjid) {
+          await schedulePrimaryMasjidNotifications(masjid);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to toggle primary masjid:", error);
+    }
+  };
 
   const handleShare = async () => {
     if (!masjid) return;
@@ -118,9 +142,18 @@ export default function MasjidDetailScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </Pressable>
-        <Pressable onPress={handleShare} style={styles.topBarBtn}>
-          <Ionicons name="share-outline" size={22} color={Colors.text} />
-        </Pressable>
+        <View style={styles.topBarRight}>
+          <Pressable onPress={togglePrimary} style={[styles.topBarBtn, { marginRight: 8 }]}>
+            <Ionicons
+              name={isPrimary ? "star" : "star-outline"}
+              size={22}
+              color={isPrimary ? Colors.accent : Colors.text}
+            />
+          </Pressable>
+          <Pressable onPress={handleShare} style={styles.topBarBtn}>
+            <Ionicons name="share-outline" size={22} color={Colors.text} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -128,6 +161,12 @@ export default function MasjidDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
+          {isPrimary && (
+            <View style={styles.primaryBadge}>
+              <Ionicons name="star" size={12} color="#fff" />
+              <Text style={styles.primaryBadgeText}>Primary Masjid</Text>
+            </View>
+          )}
           <View style={styles.heroIcon}>
             <Ionicons name="moon" size={36} color={Colors.primary} />
           </View>
@@ -253,5 +292,24 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 15,
     color: Colors.primary,
+  },
+  topBarRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  primaryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.accent,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginBottom: 12,
+  },
+  primaryBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: "#fff",
   },
 });

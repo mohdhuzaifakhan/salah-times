@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -39,6 +41,7 @@ export default function ManageEventsScreen() {
   const [description, setDescription] = useState("");
   const [expiryHours, setExpiryHours] = useState(24);
   const [saving, setSaving] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
   const isGlobal = masjidId === "global";
   const pageTitle = isGlobal ? "Global Events" : "Masjid Events";
@@ -67,6 +70,42 @@ export default function ManageEventsScreen() {
     }, [loadEvents])
   );
 
+  const handlePickImage = async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission Denied", "We need permission to access your library to upload a flyer.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          setImageUri(`data:image/jpeg;base64,${asset.base64}`);
+        } else {
+          setImageUri(asset.uri);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image.");
+    }
+  };
+
+  const handleRemoveImage = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setImageUri(null);
+  };
+
   const handleCreateEvent = async () => {
     if (!title.trim()) {
       Alert.alert("Error", "Event title is required.");
@@ -83,11 +122,13 @@ export default function ManageEventsScreen() {
         endDate,
         masjidId: masjidId!,
         createdBy: admin.uid,
+        imageUrl: imageUri || undefined,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTitle("");
       setDescription("");
+      setImageUri(null);
       loadEvents();
     } catch (error) {
       console.error("Failed to create event:", error);
@@ -164,6 +205,22 @@ export default function ManageEventsScreen() {
             numberOfLines={3}
             textAlignVertical="top"
           />
+
+          <Text style={styles.label}>Event Flyer / Image (Optional)</Text>
+          {imageUri ? (
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+              <Pressable style={styles.removeImageBtn} onPress={handleRemoveImage}>
+                <Ionicons name="trash-outline" size={16} color="#fff" />
+                <Text style={styles.removeImageText}>Remove Flyer</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.uploadBtn} onPress={handlePickImage}>
+              <Ionicons name="image-outline" size={20} color={Colors.primary} />
+              <Text style={styles.uploadBtnText}>Select Event Flyer</Text>
+            </Pressable>
+          )}
 
           <Text style={styles.label}>Expires In</Text>
           <View style={styles.expiryRow}>
@@ -355,5 +412,53 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: Colors.textMuted,
+  },
+  imagePreviewContainer: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 180,
+    resizeMode: "cover",
+  },
+  removeImageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Colors.error,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  removeImageText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: "#fff",
+  },
+  uploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingVertical: 14,
+    backgroundColor: Colors.overlay,
+    marginBottom: 16,
+  },
+  uploadBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.primary,
   },
 });

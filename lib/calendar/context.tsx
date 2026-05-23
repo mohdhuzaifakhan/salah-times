@@ -80,6 +80,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           data: { eventId: event.id },
         },
         trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: new Date(event.gregorianDate.getTime() - 24 * 60 * 60 * 1000), // 1 day before
         },
       });
