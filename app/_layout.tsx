@@ -18,6 +18,8 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 import Colors from "@/constants/colors";
+import { initializeAds } from "@/lib/ads";
+import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -72,6 +74,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) {
       void SplashScreen.hideAsync();
+      void initializeAds();
+      void refreshPrimaryMasjidNotifications();
     }
   }, [fontsLoaded]);
 

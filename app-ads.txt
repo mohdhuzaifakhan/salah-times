@@ -1,0 +1,2 @@
+# Google AdMob Authorization
+google.com, pub-5245535500553548, DIRECT, f08c47fec0942fa0

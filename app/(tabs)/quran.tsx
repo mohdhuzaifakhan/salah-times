@@ -6,7 +6,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   SafeAreaView,
   StatusBar
 } from 'react-native';
@@ -17,6 +16,8 @@ import { fetchSurahList, Surah } from '@/lib/quran/api';
 import SurahCard from '@/components/quran/SurahCard';
 import { useQuran } from '@/lib/quran/context';
 import { useLanguage } from '@/lib/language-context';
+import { QuranSkeleton } from '@/components/Skeleton';
+import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
 
 const QuranHeader = React.memo(({ search, setSearch, recentRead, t }: any) => (
   <View style={styles.header}>
@@ -92,10 +93,7 @@ export default function QuranHomeScreen() {
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>{t('loading')}</Text>
-          </View>
+          <QuranSkeleton />
         ) : (
           <FlatList
             data={filteredSurahs}
@@ -119,6 +117,7 @@ export default function QuranHomeScreen() {
           />
         )}
       </View>
+      <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );
 }
@@ -190,7 +189,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   listContent: {
-    paddingBottom: 100,
+    paddingBottom: 140,
   },
   center: {
     flex: 1,

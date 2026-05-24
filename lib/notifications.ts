@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { Masjid } from "./types";
+import { getPrimaryMasjidId, getMasjidById } from "./store";
 
 // Configure notifications presentation behavior
 Notifications.setNotificationHandler({
@@ -15,6 +16,23 @@ Notifications.setNotificationHandler({
 });
 
 /**
+ * Ensures a high-priority notification channel is created for Android.
+ */
+async function ensureAndroidChannel() {
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("prayer-alerts", {
+      name: "Prayer Alerts",
+      description: "Alerts sent exactly 10 minutes before prayer times.",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+      enableVibrate: true,
+      showBadge: false,
+    });
+  }
+}
+
+/**
  * Schedules local notifications for all prayer times over the next 7 days
  * for the given primary masjid.
  */
@@ -27,7 +45,10 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
       return;
     }
 
-    // 2. Clear all previously scheduled notifications to avoid duplicates
+    // 2. Ensure Android Notification Channel is created
+    await ensureAndroidChannel();
+
+    // 3. Clear all previously scheduled notifications to avoid duplicates
     await Notifications.cancelAllScheduledNotificationsAsync();
 
     const dailyPrayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
@@ -39,7 +60,7 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
       isha: "Isha",
     };
 
-    // 3. Loop through the next 7 days and schedule alerts
+    // 4. Loop through the next 7 days and schedule alerts
     for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
       const date = new Date();
       date.setDate(date.getDate() + dayOffset);
@@ -59,11 +80,11 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
           continue;
         }
 
-        // OPTIONAL: Alert 10 minutes BEFORE the actual namaaz time
+        // Exact alert time: exactly 10 minutes BEFORE the actual namaaz time
         const alertTime = new Date(prayerTime.getTime() - 10 * 60 * 1000); 
         if (alertTime.getTime() <= Date.now()) continue;
 
-        // 4. Schedule the high-priority notification with custom sounds and vibration
+        // 5. Schedule the high-priority notification with custom sounds and vibration
         await Notifications.scheduleNotificationAsync({
           content: {
             title: `🕌 Namaaz Alert - ${prayerLabels[prayerKey]}`,
@@ -75,6 +96,7 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: alertTime,
+            ...(Platform.OS === "android" ? { channelId: "prayer-alerts" } : {}),
           },
         });
       }
@@ -82,6 +104,27 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
     console.log("Successfully scheduled prayer notifications for primary masjid!");
   } catch (error) {
     console.error("Error scheduling prayer notifications:", error);
+  }
+}
+
+/**
+ * Automatically retrieves the user's primary masjid and reschedules
+ * prayer alerts for the upcoming 7 days to keep them refreshed and precise.
+ */
+export async function refreshPrimaryMasjidNotifications() {
+  try {
+    const primaryId = await getPrimaryMasjidId();
+    if (!primaryId) {
+      console.log("[Notifications] No primary masjid configured. Skipping notification refresh.");
+      return;
+    }
+    const masjid = await getMasjidById(primaryId);
+    if (masjid) {
+      await schedulePrimaryMasjidNotifications(masjid);
+      console.log(`[Notifications] Refreshed notifications for primary masjid: ${masjid.name}`);
+    }
+  } catch (error) {
+    console.error("[Notifications] Failed to refresh primary masjid notifications:", error);
   }
 }
 

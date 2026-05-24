@@ -5,7 +5,6 @@ import {
   View,
   ScrollView,
   Pressable,
-  ActivityIndicator,
   Platform,
   Share,
 } from "react-native";
@@ -20,6 +19,9 @@ import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 import { schedulePrimaryMasjidNotifications, clearScheduledNotifications } from "@/lib/notifications";
 import { EventCard } from "@/components/EventCard";
+import { MasjidDetailSkeleton } from "@/components/Skeleton";
+import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 
 function formatTime(time: string): string {
   const [h, m] = time.split(":");
@@ -112,8 +114,8 @@ export default function MasjidDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered, { paddingTop: insets.top + webTopInset }]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
+        <MasjidDetailSkeleton />
       </View>
     );
   }
@@ -157,7 +159,7 @@ export default function MasjidDetailScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
@@ -189,9 +191,19 @@ export default function MasjidDetailScreen() {
           </View>
         )}
 
+        <View style={{ marginBottom: 20 }}>
+          <NativeMasjidAdCard 
+            headline="Support Your Local Masjid's Expansion"
+            body="Help fund new community spaces, Islamic classes, and educational infrastructure."
+            advertiser="Masjid Renovation Fund"
+            callToAction="Donate to Masjid"
+          />
+        </View>
+
         <Text style={styles.sectionTitle}>{t('prayer_timetable')}</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
       </ScrollView>
+      <PremiumBannerAd />
     </View>
   );
 }

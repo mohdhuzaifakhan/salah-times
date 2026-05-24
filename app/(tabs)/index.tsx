@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/lib/language-context";
 import {
   StyleSheet,
@@ -7,7 +7,6 @@ import {
   FlatList,
   TextInput,
   RefreshControl,
-  ActivityIndicator,
   Platform,
   Alert,
   Pressable,
@@ -20,6 +19,9 @@ import { Masjid, AppEvent } from "@/lib/types";
 import { getAllMasjids, getGlobalEvents, getPrimaryMasjidId, getMasjidById } from "@/lib/store";
 import { MasjidCard } from "@/components/MasjidCard";
 import { EventCard } from "@/components/EventCard";
+import { ExploreSkeleton } from "@/components/Skeleton";
+import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 
 function formatTimeCompact(time: string): string {
   if (!time) return "";
@@ -83,6 +85,18 @@ export default function ExploreScreen() {
       m.city.toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredWithAds = useMemo(() => {
+    const result: (Masjid | { isAd: true; id: string })[] = [];
+    filtered.forEach((item, index) => {
+      result.push(item);
+      // Inject native ad after every 3rd masjid
+      if ((index + 1) % 3 === 0) {
+        result.push({ isAd: true, id: `ad-${item.id}` });
+      }
+    });
+    return result;
+  }, [filtered]);
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   return (
@@ -112,28 +126,31 @@ export default function ExploreScreen() {
         )}
       </View>
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
+        <ExploreSkeleton />
       ) : (
         <FlatList
-          data={filtered}
+          data={filteredWithAds}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <MasjidCard
-              masjid={item}
-              isPrimary={item.id === primaryMasjidId}
-              onPress={() =>
-                router.push({
-                  pathname: "/masjid/[id]",
-                  params: { id: item.id },
-                })
-              }
-            />
-          )}
+          renderItem={({ item }) => {
+            if ('isAd' in item) {
+              return <NativeMasjidAdCard />;
+            }
+            return (
+              <MasjidCard
+                masjid={item}
+                isPrimary={item.id === primaryMasjidId}
+                onPress={() =>
+                  router.push({
+                    pathname: "/masjid/[id]",
+                    params: { id: item.id },
+                  })
+                }
+              />
+            );
+          }}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: insets.bottom + 90 },
+            { paddingBottom: insets.bottom + 130 },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -217,6 +234,7 @@ export default function ExploreScreen() {
           }
         />
       )}
+      <PremiumBannerAd inTabBar={true} />
     </View>
   );
 }
@@ -305,11 +323,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   primaryCardPressed: {
     transform: [{ scale: 0.99 }],

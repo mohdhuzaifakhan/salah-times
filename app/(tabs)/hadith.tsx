@@ -6,10 +6,8 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -18,6 +16,9 @@ import { BOOKS, HadithBook, getDailyHadith } from '@/lib/hadith/api';
 import HadithBookCard from '@/components/hadith/HadithBookCard';
 import { useHadith } from '@/lib/hadith/context';
 import { useLanguage } from '@/lib/language-context';
+import { HadithSkeleton } from '@/components/Skeleton';
+import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import { NativeHadithAdCard } from '@/components/ads/NativeHadithAdCard';
 
 const HadithHeader = React.memo(({ search, setSearch, dailyHadith, recentRead, t }: any) => (
   <View style={styles.header}>
@@ -94,19 +95,45 @@ export default function HadithHomeScreen() {
     );
   }, [search]);
 
+  const booksWithAds = useMemo(() => {
+    const result: (HadithBook | { isAd: true; slug: string })[] = [];
+    filteredBooks.forEach((item, index) => {
+      result.push(item);
+      // Inject native ad after the second book card
+      if (index === 1) {
+        result.push({ isAd: true, slug: `ad-${item.slug}` });
+      }
+    });
+    return result;
+  }, [filteredBooks]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <HadithSkeleton />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
         <FlatList
-          data={filteredBooks}
+          data={booksWithAds}
           keyExtractor={(item) => item.slug}
-          renderItem={({ item }) => (
-            <HadithBookCard
-              book={item}
-              onPress={() => router.push(`/hadith/book/${item.slug}`)}
-            />
-          )}
+          renderItem={({ item }) => {
+            if ('isAd' in item) {
+              return <NativeHadithAdCard />;
+            }
+            return (
+              <HadithBookCard
+                book={item}
+                onPress={() => router.push(`/hadith/book/${item.slug}`)}
+              />
+            );
+          }}
           ListHeaderComponent={
             <HadithHeader 
               search={search} 
@@ -118,9 +145,10 @@ export default function HadithHomeScreen() {
           }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={<View style={{ height: 100 }} />}
+          ListFooterComponent={<View style={{ height: 140 }} />}
         />
       </View>
+      <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );
 }

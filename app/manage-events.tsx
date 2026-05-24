@@ -7,7 +7,6 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
-  ScrollView,
   Platform,
   Image,
 } from "react-native";
@@ -21,6 +20,7 @@ import { useAuth } from "@/lib/auth-context";
 import { getGlobalEvents, getMasjidEvents, createEvent, deleteEvent } from "@/lib/store";
 import { AppEvent } from "@/lib/types";
 import { EventCard } from "@/components/EventCard";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 const EXPIRY_OPTIONS = [
   { label: "1 Day", hours: 24 },
@@ -174,7 +174,7 @@ export default function ManageEventsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
@@ -285,7 +285,7 @@ export default function ManageEventsScreen() {
             />
           ))
         )}
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }

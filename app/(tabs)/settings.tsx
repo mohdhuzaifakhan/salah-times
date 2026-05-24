@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, Linking, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useQuran } from '@/lib/quran/context';
 import { useHadith } from '@/lib/hadith/context';
@@ -11,6 +12,8 @@ import { auth } from '@/lib/firebaseConfig';
 import { signOut } from 'firebase/auth';
 import { getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from '@/lib/store';
 import { clearScheduledNotifications } from '@/lib/notifications';
+import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import { NativeHadithAdCard } from '@/components/ads/NativeHadithAdCard';
 
 export default function SettingsScreen() {
   const { preferences: quranPrefs, updatePreferences: updateQuranPrefs } = useQuran();
@@ -73,19 +76,51 @@ export default function SettingsScreen() {
   };
 
   const handleAbout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       t('about_us'),
       'Salah Time App v1.0.0\n\nA comprehensive Islamic companion for prayer times, Quran, and Hadith.\n\nDeveloped with ❤️ for the Ummah.',
-      [{ text: 'OK' }]
+      [
+        {
+          text: 'Contact Developer',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Linking.openURL('mailto:mohdhuzaifa8126195456@gmail.com?subject=Salah%20Times%20Feedback').catch(err => {
+              console.error("Failed to open mail link:", err);
+            });
+          }
+        },
+        {
+          text: 'Visit Website',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Linking.openURL('https://mohdhuzaifakhan.github.io/huzaifa-portfolio/').catch(err => {
+              console.error("Failed to open website link:", err);
+            });
+          }
+        },
+        { text: 'OK', style: 'cancel' }
+      ]
     );
   };
 
   const handleRate = () => {
-    Alert.alert(
-      t('rate_app'),
-      'Redirecting to Store...',
-      [{ text: 'OK' }]
-    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const storeUrl = 'https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes';
+    Linking.openURL(storeUrl).catch((err) => {
+      console.error("Failed to open rating store URL:", err);
+      Alert.alert("Error", "Could not open App Store link.");
+    });
+  };
+
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: `Assalamu Alaikum! Download the Salah Times app to track active masjid prayer times, read Quran, Hadith, and view the Islamic calendar: https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes`,
+      });
+    } catch (error) {
+      console.error("Share failed:", error);
+    }
   };
 
   const handleNotifications = () => {
@@ -97,8 +132,8 @@ export default function SettingsScreen() {
   };
 
   const SettingItem = ({ icon, title, subtitle, rightElement, onPress }: any) => (
-    <TouchableOpacity 
-      style={styles.settingItem} 
+    <TouchableOpacity
+      style={styles.settingItem}
       onPress={onPress}
       disabled={!onPress}
     >
@@ -115,9 +150,9 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView 
+      <ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 160 }}
       >
         <View style={styles.header}>
           <Text style={styles.title}>{t('settings')}</Text>
@@ -125,20 +160,20 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('quran')}</Text>
-          
-          <SettingItem 
+
+          <SettingItem
             icon="text-outline"
             title="Arabic Font Size"
             subtitle={`${quranPrefs.fontSize}px`}
             rightElement={
               <View style={styles.fontControls}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => updateQuranPrefs({ fontSize: Math.max(16, quranPrefs.fontSize - 2) })}
                   style={styles.controlButton}
                 >
                   <Ionicons name="remove" size={20} color={Colors.primary} />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => updateQuranPrefs({ fontSize: Math.min(48, quranPrefs.fontSize + 2) })}
                   style={styles.controlButton}
                 >
@@ -148,7 +183,7 @@ export default function SettingsScreen() {
             }
           />
 
-          <SettingItem 
+          <SettingItem
             icon="language-outline"
             title={t('quran_translation')}
             subtitle={quranPrefs.translationLanguage === 'en.sahih' ? 'English' : quranPrefs.translationLanguage === 'hi.farooq' ? 'Hindi' : 'Urdu'}
@@ -172,20 +207,20 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('hadith')}</Text>
-          
-          <SettingItem 
+
+          <SettingItem
             icon="text-outline"
             title="Text Size"
             subtitle={`${hadithPrefs.fontSize}px`}
             rightElement={
               <View style={styles.fontControls}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => updateHadithPrefs({ fontSize: Math.max(12, hadithPrefs.fontSize - 2) })}
                   style={styles.controlButton}
                 >
                   <Ionicons name="remove" size={20} color={Colors.primary} />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => updateHadithPrefs({ fontSize: Math.min(32, hadithPrefs.fontSize + 2) })}
                   style={styles.controlButton}
                 >
@@ -195,11 +230,11 @@ export default function SettingsScreen() {
             }
           />
 
-          <SettingItem 
+          <SettingItem
             icon="eye-outline"
             title={t('show_arabic')}
             rightElement={
-              <Switch 
+              <Switch
                 value={hadithPrefs.showArabic}
                 onValueChange={(val) => updateHadithPrefs({ showArabic: val })}
                 trackColor={{ false: Colors.border, true: Colors.primary }}
@@ -207,7 +242,7 @@ export default function SettingsScreen() {
             }
           />
 
-          <SettingItem 
+          <SettingItem
             icon="language-outline"
             title={t('hadith_translation')}
             subtitle={hadithPrefs.language.toUpperCase()}
@@ -231,7 +266,7 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('app_section')}</Text>
-          <SettingItem 
+          <SettingItem
             icon="star-outline"
             title="Primary Masjid"
             subtitle={primaryMasjidName || "None (Select from Explore)"}
@@ -246,14 +281,14 @@ export default function SettingsScreen() {
               )
             }
           />
-          <SettingItem 
+          <SettingItem
             icon="notifications-outline"
             title={t('notifications')}
             subtitle="Manage prayer alerts"
             onPress={handleNotifications}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
-          <SettingItem 
+          <SettingItem
             icon="color-palette-outline"
             title={t('appearance')}
             subtitle="Light Mode"
@@ -286,17 +321,31 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <NativeHadithAdCard
+            headline="Learn Arabic with Al-Quran Academy"
+            body="Understand the vocabulary of the Holy Quran with bite-sized daily lessons and quizzes."
+            callToAction="Get 7 Days Free"
+          />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('support_section')}</Text>
-          <SettingItem 
+          <SettingItem
             icon="heart-outline"
             title={t('about_us')}
             onPress={handleAbout}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
-          <SettingItem 
+          <SettingItem
             icon="star-outline"
             title={t('rate_app')}
             onPress={handleRate}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="share-social-outline"
+            title={t('share_app')}
+            onPress={handleShareApp}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
         </View>
@@ -310,6 +359,7 @@ export default function SettingsScreen() {
           </View>
         )}
       </ScrollView>
+      <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );
 }

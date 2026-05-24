@@ -6,7 +6,6 @@ import {
   ScrollView, 
   SafeAreaView, 
   StatusBar,
-  ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -16,6 +15,9 @@ import { getRamadanCountdown, getEidCountdown } from '@/lib/calendar/api';
 import CalendarView from '@/components/calendar/CalendarView';
 import CountdownCard from '@/components/calendar/CountdownCard';
 import EventListCard from '@/components/calendar/EventListCard';
+import { CalendarSkeleton } from '@/components/Skeleton';
+import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import { NativeMasjidAdCard } from '@/components/ads/NativeMasjidAdCard';
 
 export default function IslamicCalendarScreen() {
   const { t } = useLanguage();
@@ -30,10 +32,10 @@ export default function IslamicCalendarScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={{ marginTop: 10, color: Colors.textMuted }}>{t('loading')}</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <CalendarSkeleton />
+      </SafeAreaView>
     );
   }
 
@@ -43,7 +45,7 @@ export default function IslamicCalendarScreen() {
       <ScrollView 
         style={styles.container}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
       >
         <View style={styles.header}>
           <Text style={styles.title}>{t('islamic_calendar')}</Text>
@@ -92,6 +94,15 @@ export default function IslamicCalendarScreen() {
         </View>
 
         <View style={styles.section}>
+          <NativeMasjidAdCard 
+            headline="Support Muslim Orphans Worldwide"
+            body="Your Sadaqah provides warm meals, clean water, and access to education for orphans in need."
+            advertiser="OrphanRelief Care"
+            callToAction="Sponsor an Orphan"
+          />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('upcoming_events')}</Text>
           {upcomingEvents.slice(0, 5).map(event => (
             <EventListCard 
@@ -102,6 +113,7 @@ export default function IslamicCalendarScreen() {
           ))}
         </View>
       </ScrollView>
+      <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );
 }

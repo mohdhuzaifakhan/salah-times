@@ -67,9 +67,8 @@ export default function EventDetailScreen() {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const isGlobal = event.masjidId === "global";
-      const messageText = `${event.title}\n\n${event.description}\n\n${
-        isGlobal ? "Global Announcement" : masjid ? `Masjid: ${masjid.name}` : ""
-      }\nShared via Salah Time App`;
+      const messageText = `${event.title}\n\n${event.description}\n\n${isGlobal ? "Global Announcement" : masjid ? `Masjid: ${masjid.name}` : ""
+        }\nShared via Salah Time App`;
 
       await Share.share({
         message: messageText,
@@ -93,12 +92,12 @@ export default function EventDetailScreen() {
   const isGlobal = event?.masjidId === "global";
   const formattedExpiry = event
     ? new Date(event.endDate).toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
     : "";
 
   if (loading) {
@@ -311,11 +310,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   placeholderText: {
     fontFamily: "Poppins_600SemiBold",
