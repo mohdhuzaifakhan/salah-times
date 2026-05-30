@@ -33,7 +33,10 @@ export interface RecentRead {
 const COLLECTIONS = {
   BOOKMARKS: 'bookmarks',
   RECENT_READS: 'recent_reads',
-  USER_PREFERENCES: 'user_preferences'
+  USER_PREFERENCES: 'user_preferences',
+  PAGE_BOOKMARKS: 'page_bookmarks',
+  READING_PROGRESS: 'reading_progress',
+  TAFSEER: 'tafseer'
 };
 
 export const addBookmark = async (bookmark: Omit<Bookmark, 'id' | 'createdAt'>) => {
@@ -113,6 +116,93 @@ export const getUserPreferences = async () => {
   
   if (docSnap.exists()) {
     return docSnap.data();
+  }
+  return null;
+};
+
+// 15-Line Quran Page Bookmarks
+export const addPageBookmark = async (pageNumber: number) => {
+  if (!auth.currentUser) return;
+  const userId = auth.currentUser.uid;
+  const id = `${userId}_${pageNumber}`;
+  
+  const docRef = doc(db, COLLECTIONS.PAGE_BOOKMARKS, id);
+  await setDoc(docRef, {
+    userId,
+    pageNumber,
+    createdAt: serverTimestamp()
+  });
+};
+
+export const removePageBookmark = async (pageNumber: number) => {
+  if (!auth.currentUser) return;
+  const userId = auth.currentUser.uid;
+  const id = `${userId}_${pageNumber}`;
+  
+  const docRef = doc(db, COLLECTIONS.PAGE_BOOKMARKS, id);
+  await deleteDoc(docRef);
+};
+
+export const getPageBookmarks = async (): Promise<number[]> => {
+  if (!auth.currentUser) return [];
+  const userId = auth.currentUser.uid;
+  
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.PAGE_BOOKMARKS),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => doc.data().pageNumber as number);
+  } catch (error) {
+    console.error("Failed to load page bookmarks:", error);
+    return [];
+  }
+};
+
+// 15-Line Quran Reading Progress
+export const saveLastReadPage = async (pageNumber: number) => {
+  if (!auth.currentUser) return;
+  const userId = auth.currentUser.uid;
+  
+  const docRef = doc(db, COLLECTIONS.READING_PROGRESS, userId);
+  await setDoc(docRef, {
+    pageNumber,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+};
+
+export const getLastReadPage = async (): Promise<number | null> => {
+  if (!auth.currentUser) return null;
+  const userId = auth.currentUser.uid;
+  
+  try {
+    const docRef = doc(db, COLLECTIONS.READING_PROGRESS, userId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data().pageNumber as number;
+    }
+  } catch (error) {
+    console.error("Failed to load reading progress:", error);
+  }
+  return null;
+};
+
+// Tafseer Firestore helper
+export const getTafseerFromFirestore = async (
+  scholar: string,
+  surahId: number,
+  ayahNumber: number
+): Promise<string | null> => {
+  try {
+    const docRef = doc(db, COLLECTIONS.TAFSEER, scholar, 'ayahs', `${surahId}_${ayahNumber}`);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data().tafseerText as string;
+    }
+  } catch (error) {
+    console.warn("Firestore Tafseer fetch failed, using API/Local fallback:", error);
   }
   return null;
 };

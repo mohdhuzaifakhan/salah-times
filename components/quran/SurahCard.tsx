@@ -19,7 +19,7 @@ const SurahCard: React.FC<SurahCardProps> = ({ surah, onPress }) => {
       <View style={styles.infoContainer}>
         <Text style={styles.englishName}>{surah.englishName}</Text>
         <Text style={styles.subInfo}>
-          {surah.revelationType} • {surah.numberOfAyahs} Ayahs
+          {surah.revelationType} • {surah.numberOfAyahs} Ayat
         </Text>
       </View>
 

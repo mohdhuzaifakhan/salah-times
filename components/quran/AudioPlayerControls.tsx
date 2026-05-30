@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
@@ -22,8 +23,9 @@ const AudioPlayerControls: React.FC<AudioPlayerControlsProps> = ({
   title,
   subtitle
 }) => {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(16, insets.bottom) }]}>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{title || 'Playing Audio'}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>{subtitle || 'Recitation'}</Text>
@@ -62,7 +64,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    paddingBottom: 32, // For safe area
   },
   info: {
     flex: 1,

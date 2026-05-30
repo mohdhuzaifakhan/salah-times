@@ -49,7 +49,7 @@ export default function AdminScreen() {
       } else if (admin?.masjidId) {
         (async () => {
           try {
-            const m = await getMasjidById(admin.masjidId);
+            const m = await getMasjidById(admin.masjidId!);
             if (isMounted) setMasjid(m);
           } catch (error) {
             console.error("Failed to load masjid:", error);
@@ -187,6 +187,21 @@ export default function AdminScreen() {
               <Text style={styles.registerButtonText}>Manage Global Events</Text>
             </Pressable>
 
+            <Pressable
+              style={({ pressed }) => [
+                styles.registerButton,
+                { backgroundColor: "#5C6B5C", marginTop: -4 },
+                pressed && styles.btnPressed,
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push("/manage-global-feedback");
+              }}
+            >
+              <Ionicons name="mail-unread-outline" size={18} color="#fff" />
+              <Text style={styles.registerButtonText}>Manage App Feedbacks</Text>
+            </Pressable>
+
             {masjids.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No masjids registered</Text>
@@ -200,21 +215,42 @@ export default function AdminScreen() {
                   <View style={styles.superMasjidHeader}>
                     <View style={styles.masjidInfoText}>
                       <Text style={styles.masjidName}>{item.name}</Text>
-                      <Text style={styles.masjidLocation}>
-                        {item.address}, {item.city}
-                      </Text>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
+                        <Text style={styles.masjidLocation} numberOfLines={1}>
+                          {item.address}, {item.city}
+                        </Text>
+                      </View>
                     </View>
+                  </View>
+
+                  <View style={styles.superMasjidFooter}>
                     <Pressable
-                      style={styles.editBtn}
+                      style={styles.superEditBtn}
                       onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         router.push({
                           pathname: "/edit-timetable",
                           params: { masjidId: item.id },
                         });
                       }}
                     >
-                      <Ionicons name="create-outline" size={16} color="#fff" />
-                      <Text style={styles.editBtnText}>Edit</Text>
+                      <Ionicons name="time-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.superEditBtnText}>Update Timetable</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.superFeedbackBtn}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push({
+                          pathname: "/masjid-feedback",
+                          params: { masjidId: item.id, masjidName: item.name },
+                        });
+                      }}
+                    >
+                      <Ionicons name="mail-unread-outline" size={16} color={Colors.accent} />
+                      <Text style={styles.superFeedbackBtnText}>View Feedbacks</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -237,6 +273,19 @@ export default function AdminScreen() {
                     </Text>
                   </View>
                 </View>
+                <Pressable
+                  style={styles.editLocalityBtn}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({
+                      pathname: "/edit-masjid-details",
+                      params: { masjidId: masjid.id },
+                    });
+                  }}
+                >
+                  <Ionicons name="create-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.editLocalityText}>Edit</Text>
+                </Pressable>
               </View>
             </View>
 
@@ -256,7 +305,7 @@ export default function AdminScreen() {
                 }}
               >
                 <Ionicons name="create-outline" size={16} color="#fff" />
-                <Text style={styles.editBtnText}>Edit</Text>
+                <Text style={styles.editBtnText}>Edit Times</Text>
               </Pressable>
             </View>
 
@@ -280,6 +329,27 @@ export default function AdminScreen() {
               >
                 <Ionicons name="megaphone-outline" size={16} color="#fff" />
                 <Text style={styles.editBtnText}>Manage</Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+              <Text style={styles.sectionTitle}>Wrong Time Messages</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.editBtn,
+                  { backgroundColor: Colors.error },
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push({
+                    pathname: "/masjid-feedback",
+                    params: { masjidId: masjid.id },
+                  });
+                }}
+              >
+                <Ionicons name="alert-circle-outline" size={16} color="#fff" />
+                <Text style={styles.editBtnText}>View Feedback</Text>
               </Pressable>
             </View>
           </>
@@ -516,5 +586,62 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 13,
     color: Colors.textSecondary,
+  },
+  editLocalityBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.overlay,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  editLocalityText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  superMasjidFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    paddingTop: 12,
+  },
+  superEditBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Colors.overlay,
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  superEditBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  superFeedbackBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(212, 168, 67, 0.08)",
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(212, 168, 67, 0.15)",
+  },
+  superFeedbackBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.accent,
   },
 });

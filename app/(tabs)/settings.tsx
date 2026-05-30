@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, Linking, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useQuran } from '@/lib/quran/context';
@@ -334,6 +334,16 @@ export default function SettingsScreen() {
             icon="heart-outline"
             title={t('about_us')}
             onPress={handleAbout}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="chatbubble-ellipses-outline"
+            title="Report App Issue / Feedback"
+            subtitle="Send feedback directly to the developer"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/global-feedback');
+            }}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
           <SettingItem

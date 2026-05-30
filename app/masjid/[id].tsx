@@ -202,6 +202,25 @@ export default function MasjidDetailScreen() {
 
         <Text style={styles.sectionTitle}>{t('prayer_timetable')}</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
+
+        <View style={styles.reportContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.reportBtn,
+              pressed && styles.btnPressed,
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({
+                pathname: "/report-masjid-time",
+                params: { masjidId: masjid.id, masjidName: masjid.name },
+              });
+            }}
+          >
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+            <Text style={styles.reportBtnText}>Report Incorrect Prayer Times</Text>
+          </Pressable>
+        </View>
       </ScrollView>
       <PremiumBannerAd />
     </View>
@@ -323,5 +342,29 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 11,
     color: "#fff",
+  },
+  reportContainer: {
+    marginTop: 24,
+    alignItems: "center",
+  },
+  reportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(192, 57, 43, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(192, 57, 43, 0.2)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  reportBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: Colors.error,
+  },
+  btnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
 });

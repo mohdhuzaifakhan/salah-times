@@ -11,7 +11,7 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "timer", selected: "timer.fill" }} />
+        <Icon sf={{ default: "timer", selected: "timer" }} />
         <Label>Prayer Times</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="quran">
@@ -23,7 +23,7 @@ function NativeTabLayout() {
         <Label>Hadith</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="calendar">
-        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
+        <Icon sf={{ default: "calendar", selected: "calendar" }} />
         <Label>Calendar</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="admin">

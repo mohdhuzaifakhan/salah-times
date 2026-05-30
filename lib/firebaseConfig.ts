@@ -1,6 +1,7 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
+import { initializeAuth, getAuth } from "firebase/auth";
+import * as FirebaseAuth from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function requiredEnv(
@@ -46,7 +47,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 let auth: any;
 try {
   auth = initializeAuth(app, {
-    persistence: (getReactNativePersistence as any)(AsyncStorage)
+    persistence: (FirebaseAuth as any).getReactNativePersistence(AsyncStorage)
   });
 } catch (e) {
   auth = getAuth(app);

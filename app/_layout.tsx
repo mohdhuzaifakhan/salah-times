@@ -48,6 +48,45 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="edit-masjid-details"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="report-masjid-time"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="global-feedback"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="masjid-feedback"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="manage-global-feedback"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="manage-events"
         options={{
           headerShown: false,

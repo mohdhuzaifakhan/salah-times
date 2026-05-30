@@ -6,15 +6,18 @@ import {
   FlatList, 
   TouchableOpacity, 
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  Platform
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useQuran } from '@/lib/quran/context';
 import { removeBookmark } from '@/lib/quran/db';
 
 export default function BookmarksScreen() {
+  const insets = useSafeAreaInsets();
   const { bookmarks, refreshBookmarks } = useQuran();
 
   const handleRemove = async (surahNumber: number, ayahNumber: number) => {
@@ -23,33 +26,37 @@ export default function BookmarksScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bookmarks</Text>
+        <Text style={styles.headerTitle}>Bookmarked Ayat</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {bookmarks.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="bookmark-outline" size={80} color={Colors.border} />
-          <Text style={styles.emptyTitle}>No Bookmarks Yet</Text>
-          <Text style={styles.emptySubtitle}>Ayahs you bookmark will appear here.</Text>
+          <Text style={styles.emptyTitle}>No Bookmarked Ayat Yet</Text>
+          <Text style={styles.emptySubtitle}>Ayat you bookmark will appear here.</Text>
         </View>
       ) : (
         <FlatList
           data={bookmarks}
           keyExtractor={(item) => item.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={styles.bookmarkCard}
               onPress={() => router.push(`/quran/${item.surahNumber}`)}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.surahName}>{item.surahName} • Ayah {item.ayahNumber}</Text>
+                <Text style={styles.surahName}>{item.surahName} • Ayat {item.ayahNumber}</Text>
                 <TouchableOpacity onPress={() => handleRemove(item.surahNumber, item.ayahNumber)}>
                   <Ionicons name="trash-outline" size={20} color={Colors.error} />
                 </TouchableOpacity>
@@ -61,7 +68,7 @@ export default function BookmarksScreen() {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

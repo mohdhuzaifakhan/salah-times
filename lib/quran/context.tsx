@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getRecentRead, getUserPreferences, getBookmarks, Bookmark, RecentRead } from './db';
+import { 
+  getRecentRead, 
+  getUserPreferences, 
+  getBookmarks, 
+  Bookmark, 
+  RecentRead,
+  addPageBookmark,
+  removePageBookmark,
+  getPageBookmarks,
+  saveLastReadPage,
+  getLastReadPage
+} from './db';
 import { auth } from '../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -18,6 +29,11 @@ interface QuranContextType {
   refreshBookmarks: () => Promise<void>;
   updatePreferences: (prefs: Partial<QuranPreferences>) => void;
   setRecentRead: (recent: RecentRead) => void;
+  pageBookmarks: number[];
+  lastReadPage: number | null;
+  refreshPageBookmarks: () => Promise<void>;
+  togglePageBookmark: (pageNumber: number) => Promise<void>;
+  updateLastReadPage: (pageNumber: number) => Promise<void>;
 }
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
@@ -25,11 +41,13 @@ const QuranContext = createContext<QuranContextType | undefined>(undefined);
 export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [recentRead, setRecentReadState] = useState<RecentRead | null>(null);
+  const [pageBookmarks, setPageBookmarks] = useState<number[]>([]);
+  const [lastReadPage, setLastReadPageState] = useState<number | null>(null);
   const [preferences, setPreferences] = useState<QuranPreferences>({
     fontSize: 24,
     showTranslation: true,
     mushafMode: false,
-    translationLanguage: 'eng-sahih',
+    translationLanguage: 'en.sahih',
   });
   const [loading, setLoading] = useState(true);
 
@@ -41,14 +59,18 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     try {
       setLoading(true);
-      const [b, r, p] = await Promise.all([
+      const [b, r, p, pb, lr] = await Promise.all([
         getBookmarks(),
         getRecentRead(),
-        getUserPreferences()
+        getUserPreferences(),
+        getPageBookmarks(),
+        getLastReadPage()
       ]);
 
       setBookmarks(b);
       setRecentReadState(r);
+      setPageBookmarks(pb);
+      setLastReadPageState(lr);
       if (p) setPreferences(prev => ({ ...prev, ...p }));
     } catch (error) {
       console.error('Error loading Quran data:', error);
@@ -64,6 +86,8 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         setBookmarks([]);
         setRecentReadState(null);
+        setPageBookmarks([]);
+        setLastReadPageState(null);
         setLoading(false);
       }
     });
@@ -74,6 +98,25 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshBookmarks = async () => {
     const b = await getBookmarks();
     setBookmarks(b);
+  };
+
+  const refreshPageBookmarks = async () => {
+    const pb = await getPageBookmarks();
+    setPageBookmarks(pb);
+  };
+
+  const togglePageBookmark = async (pageNumber: number) => {
+    if (pageBookmarks.includes(pageNumber)) {
+      await removePageBookmark(pageNumber);
+    } else {
+      await addPageBookmark(pageNumber);
+    }
+    await refreshPageBookmarks();
+  };
+
+  const updateLastReadPage = async (pageNumber: number) => {
+    setLastReadPageState(pageNumber);
+    await saveLastReadPage(pageNumber);
   };
 
   const updatePreferences = (prefs: Partial<QuranPreferences>) => {
@@ -93,7 +136,12 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       loading,
       refreshBookmarks,
       updatePreferences,
-      setRecentRead
+      setRecentRead,
+      pageBookmarks,
+      lastReadPage,
+      refreshPageBookmarks,
+      togglePageBookmark,
+      updateLastReadPage
     }}>
       {children}
     </QuranContext.Provider>

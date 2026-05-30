@@ -89,9 +89,9 @@ export default function SurahDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 0 : insets.top + 8 }]}>
+    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -121,6 +121,10 @@ export default function SurahDetailScreen() {
               showTranslation={preferences.showTranslation}
             />
           )}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={styles.listContent}
         />
 
@@ -132,7 +136,7 @@ export default function SurahDetailScreen() {
           subtitle="Mishary Rashid Alafasy"
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

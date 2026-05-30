@@ -304,3 +304,106 @@ export async function savePrimaryMasjidId(id: string | null): Promise<void> {
   }
 }
 
+// Wrong Time Reporting & Masjid Feedback CRUD
+export async function createMasjidMessage(
+  masjidId: string,
+  masjidName: string,
+  prayerName: string,
+  suggestedTime: string,
+  message: string,
+  email: string
+): Promise<any> {
+  try {
+    const msgRef = doc(collection(db, "masjid_messages"));
+    const newMsg = {
+      id: msgRef.id,
+      masjidId,
+      masjidName,
+      prayerName,
+      suggestedTime,
+      message,
+      email: email.toLowerCase(),
+      createdAt: Date.now(),
+    };
+    await setDoc(msgRef, newMsg);
+    return newMsg;
+  } catch (error) {
+    console.error("Error creating masjid message:", error);
+    throw error;
+  }
+}
+
+export async function getMasjidMessages(masjidId: string): Promise<any[]> {
+  try {
+    const q = query(
+      collection(db, "masjid_messages"),
+      where("masjidId", "==", masjidId)
+    );
+    const querySnapshot = await getDocs(q);
+    const messages: any[] = [];
+    querySnapshot.forEach((doc) => {
+      messages.push(doc.data());
+    });
+    return messages.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.error("Error getting masjid messages:", error);
+    return [];
+  }
+}
+
+export async function deleteMasjidMessage(id: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "masjid_messages", id));
+    return true;
+  } catch (error) {
+    console.error("Error deleting masjid message:", error);
+    return false;
+  }
+}
+
+// Global Support Tickets & App Feedback CRUD
+export async function createAppMessage(
+  email: string,
+  message: string
+): Promise<any> {
+  try {
+    const msgRef = doc(collection(db, "app_messages"));
+    const newMsg = {
+      id: msgRef.id,
+      email: email.toLowerCase(),
+      message,
+      createdAt: Date.now(),
+    };
+    await setDoc(msgRef, newMsg);
+    return newMsg;
+  } catch (error) {
+    console.error("Error creating app message:", error);
+    throw error;
+  }
+}
+
+export async function getAppMessages(): Promise<any[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, "app_messages"));
+    const messages: any[] = [];
+    querySnapshot.forEach((doc) => {
+      messages.push(doc.data());
+    });
+    return messages.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.error("Error getting app messages:", error);
+    return [];
+  }
+}
+
+export async function deleteAppMessage(id: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "app_messages", id));
+    return true;
+  } catch (error) {
+    console.error("Error deleting app message:", error);
+    return false;
+  }
+}
+
+
