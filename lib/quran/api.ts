@@ -184,7 +184,12 @@ export const fetchQuranPage = async (pageNumber: number, translationEdition: str
     console.error(`Error fetching Quran page ${pageNumber}:`, error);
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached) return JSON.parse(cached);
-    throw error;
+    return {
+      pageNumber,
+      ayahs: [],
+      surahs: {},
+      error: true
+    } as any;
   }
 };
 

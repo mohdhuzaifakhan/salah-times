@@ -19,9 +19,12 @@ import { getAppMessages, deleteAppMessage } from "@/lib/store";
 
 interface AppMessage {
   id: string;
-  email: string;
   message: string;
   createdAt: number;
+  email?: string;
+  phone?: string;
+  details?: string;
+  idea?: string;
 }
 
 export default function ManageGlobalFeedbackScreen() {
@@ -105,14 +108,47 @@ export default function ManageGlobalFeedbackScreen() {
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.emailRow}>
-                  <Ionicons name="person-circle-outline" size={20} color={Colors.primary} />
-                  <Text style={styles.emailText}>{item.email}</Text>
+                <View style={styles.infoCol}>
+                  {item.phone ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="call-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.infoText}>{item.phone}</Text>
+                    </View>
+                  ) : null}
+                  {item.email ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="mail-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.infoText}>{item.email}</Text>
+                    </View>
+                  ) : null}
+                  {!item.phone && !item.email ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="person-circle-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.infoText}>Anonymous User</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
               </View>
 
+              <Text style={styles.subjectLabel}>Subject:</Text>
               <Text style={styles.messageText}>{item.message}</Text>
+
+              {item.details ? (
+                <>
+                  <Text style={styles.sectionLabel}>Additional Details:</Text>
+                  <Text style={styles.detailText}>{item.details}</Text>
+                </>
+              ) : null}
+
+              {item.idea ? (
+                <View style={styles.ideaContainer}>
+                  <Text style={styles.ideaLabel}>
+                    <Ionicons name="bulb-outline" size={14} color="#B08E35" /> Suggested Idea:
+                  </Text>
+                  <Text style={styles.ideaText}>{item.idea}</Text>
+                </View>
+              ) : null}
 
               <View style={styles.cardFooter}>
                 <View />
@@ -203,17 +239,62 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     paddingBottom: 8,
   },
-  emailRow: {
+  infoCol: {
+    gap: 4,
+    flex: 1,
+  },
+  infoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flex: 1,
   },
-  emailText: {
+  infoText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
     color: Colors.text,
-    flex: 1,
+  },
+  subjectLabel: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  sectionLabel: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  detailText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  ideaContainer: {
+    backgroundColor: 'rgba(212, 168, 67, 0.05)',
+    borderColor: '#EADBB6',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  ideaLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: '#B08E35',
+    marginBottom: 4,
+  },
+  ideaText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.text,
+    lineHeight: 20,
   },
   dateText: {
     fontFamily: "Poppins_400Regular",

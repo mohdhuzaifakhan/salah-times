@@ -338,7 +338,7 @@ export default function SettingsScreen() {
           />
           <SettingItem
             icon="chatbubble-ellipses-outline"
-            title="Report App Issue / Feedback"
+            title="Feedback Channel"
             subtitle="Send feedback directly to the developer"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

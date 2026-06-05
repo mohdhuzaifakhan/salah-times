@@ -24,8 +24,9 @@ interface MasjidMessage {
   prayerName: string;
   suggestedTime: string;
   message: string;
-  email: string;
+  phone: string;
   createdAt: number;
+  messageType?: string;
 }
 
 export default function MasjidFeedbackScreen() {
@@ -109,6 +110,20 @@ export default function MasjidFeedbackScreen() {
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <View style={styles.card}>
+              <View style={styles.typeBadgeContainer}>
+                {item.messageType === "timetable_update" ? (
+                  <View style={[styles.typeBadge, styles.timetableTypeBadge]}>
+                    <Ionicons name="time-outline" size={13} color="#B08E35" />
+                    <Text style={[styles.typeBadgeText, styles.timetableTypeText]}>Timetable Correction Request</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.typeBadge, styles.feedbackTypeBadge]}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={13} color={Colors.primary} />
+                    <Text style={[styles.typeBadgeText, styles.feedbackTypeText]}>General Feedback</Text>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.cardHeader}>
                 <View style={styles.prayerBadge}>
                   <Text style={styles.prayerName}>{item.prayerName}</Text>
@@ -122,8 +137,8 @@ export default function MasjidFeedbackScreen() {
 
               <View style={styles.cardFooter}>
                 <View style={styles.emailRow}>
-                  <Ionicons name="mail-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.emailText}>{item.email}</Text>
+                  <Ionicons name="call-outline" size={14} color={Colors.textMuted} />
+                  <Text style={styles.emailText}>{item.phone}</Text>
                 </View>
                 <Pressable
                   style={styles.deleteBtn}
@@ -202,6 +217,34 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+  },
+  typeBadgeContainer: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  timetableTypeBadge: {
+    backgroundColor: "rgba(212, 168, 67, 0.12)",
+  },
+  timetableTypeText: {
+    color: "#B08E35",
+  },
+  feedbackTypeBadge: {
+    backgroundColor: Colors.overlay,
+  },
+  feedbackTypeText: {
+    color: Colors.primary,
+  },
+  typeBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
   },
   cardHeader: {
     flexDirection: "row",

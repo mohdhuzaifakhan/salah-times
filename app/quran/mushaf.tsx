@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,11 @@ import {
   Dimensions,
   Platform,
   Alert,
-  ScrollView
+  ScrollView,
+  Modal,
+  TextInput,
+  FlatList,
+  Pressable
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,8 +27,192 @@ import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import AyahBottomSheet from '@/components/quran/AyahBottomSheet';
 import { useLanguage } from '@/lib/language-context';
 import * as Haptics from 'expo-haptics';
+import { SURA_START_PAGES, PARAH_LIST } from '@/lib/quran/constants';
 
 const { width } = Dimensions.get('window');
+const PAGES_ARRAY = Array.from({ length: 604 }, (_, i) => i + 1);
+
+// Helper functions for header lookup
+const getSurahForPage = (page: number) => {
+  let activeSurah = SURA_START_PAGES[0];
+  for (const s of SURA_START_PAGES) {
+    if (s.startPage <= page) {
+      activeSurah = s;
+    } else {
+      break;
+    }
+  }
+  return activeSurah;
+};
+
+const getCurrentParah = (page: number) => {
+  let activeParah = PARAH_LIST[0];
+  for (const p of PARAH_LIST) {
+    if (p.startPage <= page) {
+      activeParah = p;
+    } else {
+      break;
+    }
+  }
+  return activeParah;
+};
+
+// Memoized Page Item component
+const MushafPageItem = React.memo(({
+  pageNumber,
+  translationLanguage,
+  onAyahTap,
+  selectedAyah,
+  fontSize,
+  onPagePress
+}: {
+  pageNumber: number;
+  translationLanguage: string;
+  onAyahTap: (ayah: MushafAyah) => void;
+  selectedAyah: MushafAyah | null;
+  fontSize: number;
+  onPagePress: () => void;
+}) => {
+  const [loading, setLoading] = useState<boolean>(true);
+  const [pageData, setPageData] = useState<MushafPage | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadPageData = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchQuranPage(pageNumber, translationLanguage);
+        if (isMounted) {
+          setPageData(data);
+        }
+      } catch (error) {
+        console.error("Failed to load page " + pageNumber, error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    loadPageData();
+    return () => {
+      isMounted = false;
+    };
+  }, [pageNumber, translationLanguage]);
+
+  if (loading) {
+    return (
+      <View style={styles.pageItemContainer}>
+        <View style={styles.mushafPaper}>
+          <View style={styles.decorativeFrame}>
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loaderText}>Loading page {pageNumber}...</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (!pageData || pageData.ayahs.length === 0) {
+    const isError = pageData && 'error' in pageData && (pageData as any).error;
+    return (
+      <View style={styles.pageItemContainer}>
+        <View style={styles.mushafPaper}>
+          <View style={styles.decorativeFrame}>
+            <View style={styles.loaderContainer}>
+              {isError ? (
+                <Ionicons name="cloud-offline-outline" size={48} color={Colors.textMuted} style={{ marginBottom: 12 }} />
+              ) : (
+                <Ionicons name="book-outline" size={48} color={Colors.textMuted} style={{ marginBottom: 12 }} />
+              )}
+              <Text style={styles.loaderText}>
+                {isError 
+                  ? "Failed to load page.\nPlease check your internet connection." 
+                  : `Page ${pageNumber} is empty`}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  const uniqueSurahNumbers = Array.from(new Set(pageData.ayahs.map(a => a.surah.number)));
+
+  return (
+    <View style={styles.pageItemContainer}>
+      <Pressable onPress={onPagePress} style={styles.mushafPaper}>
+        <View style={styles.decorativeFrame}>
+          <View style={styles.innerFrame}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+            >
+              <View style={styles.quranContent}>
+                {uniqueSurahNumbers.map((surahNumber) => {
+                  const surahAyahs = pageData.ayahs.filter(a => a.surah.number === surahNumber);
+                  const firstAyah = surahAyahs[0];
+                  const renderHeader = firstAyah.numberInSurah === 1;
+
+                  return (
+                    <View key={`surah_group_${surahNumber}`} style={styles.surahGroup}>
+                      {renderHeader && (
+                        <View style={styles.surahBannerContainer}>
+                          <View style={styles.surahBannerCard}>
+                            <View style={styles.bannerOrnamentLeft} />
+                            <View style={styles.bannerCenterContent}>
+                              <Text style={styles.bannerArabicTitle}>{firstAyah.surah.name}</Text>
+                            </View>
+                            <View style={styles.bannerOrnamentRight} />
+                          </View>
+                          {/* Centered Bismillah Header (Not for Surah 1 or 9) */}
+                          {firstAyah.surah.number !== 1 && firstAyah.surah.number !== 9 && (
+                            <Text style={styles.bismillahText}>بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</Text>
+                          )}
+                        </View>
+                      )}
+                      <Text style={styles.arabicParagraph}>
+                        {surahAyahs.map((item) => {
+                          const isHighlightedText = selectedAyah?.number === item.number;
+                          // Optimize display font size to fit more nicely
+                          const displayFontSize = Math.min(22, (fontSize * 0.85) + 2);
+                          const displayLineHeight = displayFontSize * 1.95;
+
+                          // Strip Bismillah prefix if not Surah 1 or 9 and it is the first ayah
+                          let textToRender = item.text;
+                          if (item.numberInSurah === 1 && item.surah.number !== 1 && item.surah.number !== 9) {
+                            const BISMILLAH_REGEX = /^بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ\s*/;
+                            textToRender = textToRender.replace(BISMILLAH_REGEX, "");
+                          }
+
+                          return (
+                            <Text
+                              key={item.number}
+                              onPress={() => onAyahTap(item)}
+                              style={[
+                                styles.ayahTextSegment,
+                                { fontSize: displayFontSize, lineHeight: displayLineHeight },
+                                isHighlightedText && styles.highlightedAyahText
+                              ]}
+                            >
+                              {textToRender}
+                              <Text style={styles.ayahBadge}> ﴿{item.numberInSurah}﴾ </Text>
+                            </Text>
+                          );
+                        })}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Pressable>
+    </View>
+  );
+});
 
 export default function MushafScreen() {
   const insets = useSafeAreaInsets();
@@ -32,83 +220,55 @@ export default function MushafScreen() {
   const initialPage = page ? parseInt(page as string, 10) : 1;
 
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
-  const [pageData, setPageData] = useState<MushafPage | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [selectedAyah, setSelectedAyah] = useState<MushafAyah | null>(null);
   const [bottomSheetVisible, setBottomSheetVisible] = useState<boolean>(false);
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+  
+  // Custom Surah Dropdown selector state
+  const [showSurahModal, setShowSurahModal] = useState<boolean>(false);
+  const [surahSearch, setSurahSearch] = useState<string>('');
 
   const { preferences, bookmarks, pageBookmarks, togglePageBookmark, updateLastReadPage, refreshBookmarks } = useQuran();
-  const { playAudio, isPlaying, togglePlayback, currentUrl } = useAudioPlayer();
+  const { playAudio, pauseAudio, isPlaying, togglePlayback, currentUrl } = useAudioPlayer();
   const { language } = useLanguage();
-
-  // Gesture Ref for Horizontal Swipes
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    loadPage();
     // Auto-update reading progress in background
     updateLastReadPage(currentPage);
   }, [currentPage]);
 
-  const loadPage = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchQuranPage(currentPage, preferences.translationLanguage);
-      setPageData(data);
-    } catch (error) {
-      console.error("Failed to load page:", error);
-      Alert.alert("Error", "Failed to fetch Quran page. Make sure you are online.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Determine active Surahs on this page to show in the header
-  const getPageHeaderInfo = () => {
-    if (!pageData || pageData.ayahs.length === 0) return { surahNames: 'Quran', juz: 1 };
-
-    const uniqueSurahs = Array.from(new Set(pageData.ayahs.map(a => a.surah.englishName)));
-    const surahNames = uniqueSurahs.join(' & ');
-    const juz = pageData.ayahs[0].juz;
-
-    return { surahNames, juz };
-  };
+  // Scroll to initial page index on load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: initialPage - 1,
+        animated: false
+      });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= 604) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      flatListRef.current?.scrollToIndex({
+        index: newPage - 1,
+        animated: false
+      });
       setCurrentPage(newPage);
       setSelectedAyah(null);
     }
   };
 
-  // horizontal Swipe Detection (Arabic is RTL, so swipes are reversed!)
-  // Left Swipe -> Move to Next Page (page + 1)
-  // Right Swipe -> Move to Previous Page (page - 1)
-  const handleTouchStart = (e: any) => {
-    const { pageX, pageY } = e.nativeEvent;
-    touchStartRef.current = { x: pageX, y: pageY };
-  };
-
-  const handleTouchEnd = (e: any) => {
-    if (!touchStartRef.current) return;
-
-    const { pageX, pageY } = e.nativeEvent;
-    const diffX = pageX - touchStartRef.current.x;
-    const diffY = pageY - touchStartRef.current.y;
-
-    // Ignore minor vertical movements, focus on distinct horizontal swipes
-    if (Math.abs(diffX) > 60 && Math.abs(diffY) < 100) {
-      if (diffX > 0) {
-        // Swipe Right: Page decreases (previous page)
-        handlePageChange(currentPage - 1);
-      } else {
-        // Swipe Left: Page increases (next page)
-        handlePageChange(currentPage + 1);
-      }
+  const handleScroll = (e: any) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const pageIndex = Math.round(offsetX / width);
+    const newPage = pageIndex + 1;
+    if (newPage !== currentPage && newPage >= 1 && newPage <= 604) {
+      setCurrentPage(newPage);
+      setSelectedAyah(null);
     }
-
-    touchStartRef.current = null;
   };
 
   const handleAyahTap = (ayah: MushafAyah) => {
@@ -120,29 +280,6 @@ export default function MushafScreen() {
   const handlePageBookmarkToggle = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await togglePageBookmark(currentPage);
-  };
-
-  const showJumpPageAlert = () => {
-    Alert.prompt(
-      "Jump to Page",
-      "Enter a page number from 1 to 604:",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Go",
-          onPress: (val?: string) => {
-            const num = parseInt(val || '', 10);
-            if (num >= 1 && num <= 604) {
-              handlePageChange(num);
-            } else {
-              Alert.alert("Invalid Page", "Please enter a number between 1 and 604.");
-            }
-          }
-        }
-      ],
-      "plain-text",
-      ""
-    );
   };
 
   const isAyahBookmarked = (ayah: MushafAyah) => {
@@ -170,7 +307,12 @@ export default function MushafScreen() {
   const handleAyahPlay = () => {
     if (!selectedAyah) return;
     const url = getAudioUrl(selectedAyah.surah.number, selectedAyah.number);
-    playAudio(url);
+    // Pause currently playing audio if tapped again, otherwise play
+    if (isPlaying && currentUrl === url) {
+      pauseAudio();
+    } else {
+      playAudio(url);
+    }
   };
 
   const isSelectedAyahPlaying = () => {
@@ -179,134 +321,173 @@ export default function MushafScreen() {
     return isPlaying && currentUrl === url;
   };
 
-  const renderSurahBanner = (ayah: MushafAyah) => {
-    return (
-      <View style={styles.surahBannerContainer} key={`banner_${ayah.surah.number}`}>
-        <View style={styles.bannerBorderLine} />
-        <View style={styles.surahBannerCard}>
-          <Text style={styles.bannerArabicTitle}>سُورَةُ {ayah.surah.name}</Text>
-          <Text style={styles.bannerSubtitle}>
-            {ayah.surah.englishName}  •  {ayah.surah.revelationType}  •  {ayah.surah.numberOfAyahs} Ayat
-          </Text>
-        </View>
-        <View style={styles.bannerBorderLine} />
-      </View>
-    );
-  };
-
-  const { surahNames, juz } = getPageHeaderInfo();
+  const currentSurahInfo = getSurahForPage(currentPage);
+  const currentParahInfo = getCurrentParah(currentPage);
   const isPageBookmarked = pageBookmarks.includes(currentPage);
 
+  // Filter Surah list for search within dropdown
+  const filteredSurahList = useMemo(() => {
+    return SURA_START_PAGES.filter(s =>
+      s.englishName.toLowerCase().includes(surahSearch.toLowerCase()) ||
+      s.name.includes(surahSearch) ||
+      s.number.toString().includes(surahSearch)
+    );
+  }, [surahSearch]);
+
+  const getItemLayout = (data: any, index: number) => ({
+    length: width,
+    offset: width * index,
+    index,
+  });
+
+  const toggleFullScreen = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsFullScreen(!isFullScreen);
+  };
+
   return (
-    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.safeArea, { paddingTop: isFullScreen ? 0 : insets.top }]}>
+      <StatusBar hidden={isFullScreen} barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Top Header Navigation */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-
-        <View style={styles.headerInfoContainer}>
-          <Text style={styles.headerSurah} numberOfLines={1}>{surahNames}</Text>
-          <Text style={styles.headerJuz}>Parah {juz}  •  Page {currentPage}</Text>
-        </View>
-
-        <View style={styles.rightHeaderActions}>
-          <TouchableOpacity onPress={handlePageBookmarkToggle} style={styles.iconButton}>
-            <Ionicons
-              name={isPageBookmarked ? "bookmark" : "bookmark-outline"}
-              size={24}
-              color={isPageBookmarked ? Colors.accent : Colors.text}
-            />
+      {/* Header Layout matches Mockup 2 (Removed rounded bottom corners) */}
+      {!isFullScreen && (
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={showJumpPageAlert} style={styles.iconButton}>
-            <Ionicons name="compass-outline" size={24} color={Colors.text} />
+
+          {/* Center: Surah selector dropdown */}
+          <TouchableOpacity
+            onPress={() => {
+              setSurahSearch('');
+              setShowSurahModal(true);
+            }}
+            style={styles.headerDropdown}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.headerSurahText} numberOfLines={1}>
+              {currentSurahInfo.englishName}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
           </TouchableOpacity>
+
+          {/* Right: Parah index */}
+          <View style={styles.headerRightContainer}>
+            <TouchableOpacity onPress={handlePageBookmarkToggle} style={[styles.iconButton, { marginRight: 4 }]}>
+              <Ionicons
+                name={isPageBookmarked ? "bookmark" : "bookmark-outline"}
+                size={20}
+                color={isPageBookmarked ? Colors.accentLight : "#FFFFFF"}
+              />
+            </TouchableOpacity>
+            <Text style={styles.headerJuzText}>Parah {currentParahInfo.number}</Text>
+          </View>
         </View>
-      </View>
+      )}
 
-      {/* Main Swipable Book Canvas */}
-      <View
-        style={styles.bookCanvas}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {loading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loaderText}>Loading page {currentPage}...</Text>
-          </View>
-        ) : (
-          <View style={styles.mushafPaper}>
-            <View style={styles.decorativeFrame}>
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.quranContent}
-              >
-                {(() => {
-                  if (!pageData || pageData.ayahs.length === 0) return null;
-
-                  const uniqueSurahNumbers = Array.from(new Set(pageData.ayahs.map(a => a.surah.number)));
-
-                  return uniqueSurahNumbers.map((surahNumber) => {
-                    const surahAyahs = pageData.ayahs.filter(a => a.surah.number === surahNumber);
-                    const firstAyah = surahAyahs[0];
-                    const renderHeader = firstAyah.numberInSurah === 1;
-
-                    return (
-                      <View key={`surah_group_${surahNumber}`} style={styles.surahGroup}>
-                        {renderHeader && renderSurahBanner(firstAyah)}
-                        <Text style={styles.arabicParagraph}>
-                          {surahAyahs.map((item) => (
-                            <Text
-                              key={item.number}
-                              onPress={() => handleAyahTap(item)}
-                              style={[
-                                styles.ayahTextSegment,
-                                selectedAyah?.number === item.number && styles.highlightedAyahText
-                              ]}
-                            >
-                              {item.text}
-                              <Text style={styles.ayahBadge}> ﴿{item.numberInSurah}﴾ </Text>
-                            </Text>
-                          ))}
-                        </Text>
-                      </View>
-                    );
-                  });
-                })()}
-              </ScrollView>
-            </View>
-          </View>
+      {/* Page swiper using Native Paging enabled FlatList (Inverted to flow RTL!) */}
+      <FlatList
+        ref={flatListRef}
+        data={PAGES_ARRAY}
+        horizontal
+        pagingEnabled
+        inverted
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.toString()}
+        renderItem={({ item }) => (
+          <MushafPageItem
+            pageNumber={item}
+            translationLanguage={preferences.translationLanguage}
+            onAyahTap={handleAyahTap}
+            selectedAyah={selectedAyah}
+            fontSize={preferences.fontSize}
+            onPagePress={toggleFullScreen}
+          />
         )}
-      </View>
+        onMomentumScrollEnd={handleScroll}
+        getItemLayout={getItemLayout}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        removeClippedSubviews={Platform.OS === 'android'}
+        style={styles.bookCanvas}
+      />
 
       {/* Dynamic Swiper Bottom Controls */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
-        <TouchableOpacity
-          onPress={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage <= 1}
-          style={[styles.pageNavBtn, currentPage <= 1 && styles.disabledNavBtn]}
-        >
-          <Ionicons name="chevron-back" size={24} color={currentPage <= 1 ? Colors.textMuted : Colors.primary} />
-          <Text style={[styles.navBtnText, currentPage <= 1 && styles.disabledBtnText]}>Prev</Text>
-        </TouchableOpacity>
+      {!isFullScreen && (
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
+          <TouchableOpacity
+            onPress={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            style={[styles.pageNavBtn, currentPage <= 1 && styles.disabledNavBtn]}
+          >
+            <Ionicons name="chevron-back" size={24} color={currentPage <= 1 ? Colors.textMuted : Colors.primary} />
+            <Text style={[styles.navBtnText, currentPage <= 1 && styles.disabledBtnText]}>Prev</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity onPress={showJumpPageAlert} style={styles.pageIndicatorContainer}>
-          <Text style={styles.pageIndicatorTitle}>PAGE</Text>
-          <Text style={styles.pageIndicatorNumber}>{currentPage} / 604</Text>
-        </TouchableOpacity>
+          <View style={styles.pageIndicatorContainer}>
+            <Text style={styles.pageIndicatorTitle}>PAGE</Text>
+            <Text style={styles.pageIndicatorNumber}>{currentPage} / 604</Text>
+          </View>
 
-        <TouchableOpacity
-          onPress={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage >= 604}
-          style={[styles.pageNavBtn, currentPage >= 604 && styles.disabledNavBtn]}
-        >
-          <Text style={[styles.navBtnText, currentPage >= 604 && styles.disabledBtnText]}>Next</Text>
-          <Ionicons name="chevron-forward" size={24} color={currentPage >= 604 ? Colors.textMuted : Colors.primary} />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= 604}
+            style={[styles.pageNavBtn, currentPage >= 604 && styles.disabledNavBtn]}
+          >
+            <Text style={[styles.navBtnText, currentPage >= 604 && styles.disabledBtnText]}>Next</Text>
+            <Ionicons name="chevron-forward" size={24} color={currentPage >= 604 ? Colors.textMuted : Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Surah Dropdown Selector Modal */}
+      <Modal visible={showSurahModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Surah</Text>
+              <TouchableOpacity onPress={() => setShowSurahModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSearchBox}>
+              <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Surah..."
+                value={surahSearch}
+                onChangeText={setSurahSearch}
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+
+            <FlatList
+              data={filteredSurahList}
+              keyExtractor={(item) => item.number.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalSurahItem}
+                  onPress={() => {
+                    setShowSurahModal(false);
+                    setSurahSearch('');
+                    handlePageChange(item.startPage);
+                  }}
+                >
+                  <View style={styles.modalSurahNumber}>
+                    <Text style={styles.modalSurahNumberText}>{item.number}</Text>
+                  </View>
+                  <Text style={styles.modalSurahName}>{item.englishName}</Text>
+                  <Text style={styles.modalSurahArabic}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Tafseer & Actions Sheet */}
       <AyahBottomSheet
@@ -329,48 +510,54 @@ export default function MushafScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    paddingVertical: 6,
+    backgroundColor: Colors.primary,
     zIndex: 10,
   },
   iconButton: {
-    padding: 8,
+    padding: 6,
     borderRadius: 20,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  headerInfoContainer: {
-    flex: 1,
+  headerDropdown: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    maxWidth: '55%',
   },
-  headerSurah: {
+  headerSurahText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 15,
-    color: Colors.text,
+    color: '#FFFFFF',
   },
-  headerJuz: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
-    color: Colors.primary,
-    marginTop: 1,
-  },
-  rightHeaderActions: {
+  headerRightContainer: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+  },
+  headerJuzText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginLeft: 4,
   },
   bookCanvas: {
     flex: 1,
     backgroundColor: Colors.surfaceAlt,
-    padding: 8,
+  },
+  pageItemContainer: {
+    width: width,
+    height: '100%',
+    padding: 4,
   },
   loaderContainer: {
     flex: 1,
@@ -385,85 +572,116 @@ const styles = StyleSheet.create({
   },
   mushafPaper: {
     flex: 1,
-    backgroundColor: '#FAFBF6', // Warm off-white paper texture
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E6E8DF',
+    backgroundColor: '#FAFBF6', // Elegant warm off-white paper
     overflow: 'hidden',
   },
   decorativeFrame: {
     flex: 1,
-    margin: 6,
+    padding: 6,
     borderWidth: 2,
-    borderColor: '#D4A843', // Elegant Gold frame border
-    borderRadius: 14,
-    padding: 8,
+    borderColor: '#EADBB6', // Soft gold outer border
+    margin: 6,
+    borderRadius: 12,
+  },
+  innerFrame: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D4A843', // Ornate gold inner border
+    padding: 6,
+    borderRadius: 8,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
   quranContent: {
-    paddingBottom: 20,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   surahBannerContainer: {
     width: '100%',
     alignItems: 'center',
-    marginVertical: 16,
-  },
-  bannerBorderLine: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#D4A843',
+    marginVertical: 12,
   },
   surahBannerCard: {
-    backgroundColor: 'rgba(13, 115, 119, 0.05)',
-    width: '100%',
-    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 3,
-    borderRightWidth: 3,
+    justifyContent: 'space-between',
     borderColor: '#D4A843',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    width: '94%',
+    height: 48,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(212, 168, 67, 0.04)',
+  },
+  bannerOrnamentLeft: {
+    width: 10,
+    height: 10,
+    borderLeftWidth: 1.5,
+    borderTopWidth: 1.5,
+    borderColor: '#D4A843',
+    transform: [{ rotate: '-45deg' }],
+  },
+  bannerOrnamentRight: {
+    width: 10,
+    height: 10,
+    borderRightWidth: 1.5,
+    borderTopWidth: 1.5,
+    borderColor: '#D4A843',
+    transform: [{ rotate: '45deg' }],
+  },
+  bannerCenterContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bannerArabicTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins_700Bold',
-    color: Colors.primaryDark,
+    fontSize: 22,
+    fontFamily: 'Amiri_700Bold',
+    color: '#B08E35', // Premium dark gold title
     textAlign: 'center',
   },
-  bannerSubtitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 10,
-    color: Colors.textSecondary,
-    marginTop: 4,
+  bismillahText: {
+    fontFamily: 'Amiri_400Regular',
+    fontSize: 21,
+    color: '#1A2E1A',
+    textAlign: 'center',
+    marginTop: 14,
+    marginBottom: 6,
     letterSpacing: 0.5,
   },
   arabicParagraph: {
     writingDirection: 'rtl',
     textAlign: 'center',
-    lineHeight: 58, // Standard height to resemble 15-line layout
-    marginVertical: 6,
+    marginVertical: 4,
   },
   ayahTextSegment: {
-    fontSize: 26,
-    color: Colors.text,
-    lineHeight: 58,
+    fontFamily: 'Amiri_400Regular',
+    color: '#1A2E1A',
+    textAlign: 'center',
   },
   surahGroup: {
     width: '100%',
     marginBottom: 8,
   },
   highlightedAyahText: {
-    backgroundColor: 'rgba(212, 168, 67, 0.25)', // Elegant soft golden overlay highlight
+    backgroundColor: 'rgba(212, 168, 67, 0.22)', // Elegant soft golden overlay highlight
     borderRadius: 6,
   },
   ayahBadge: {
-    color: Colors.primary,
+    color: '#B08E35',
     fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Amiri_700Bold',
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 8,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
@@ -471,7 +689,7 @@ const styles = StyleSheet.create({
   pageNavBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.overlay,
+    backgroundColor: Colors.surfaceAlt,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
@@ -503,5 +721,82 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.primary,
     marginTop: 1,
+  },
+  // Modal Selector Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '75%',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: Colors.primary,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F2EB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: Colors.text,
+  },
+  modalSurahItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  modalSurahNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  modalSurahNumberText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  modalSurahName: {
+    flex: 1,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: Colors.text,
+  },
+  modalSurahArabic: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: Colors.primary,
   },
 });

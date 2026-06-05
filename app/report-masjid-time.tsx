@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { createMasjidMessage } from "@/lib/store";
+import { createMasjidMessage, createAdminNotification } from "@/lib/store";
 import { PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/lib/auth-context";
@@ -28,7 +28,7 @@ export default function ReportMasjidTimeScreen() {
   const [time, setTime] = useState("");
   const [ampm, setAmpm] = useState<"AM" | "PM">("AM");
   const [message, setMessage] = useState("");
-  const [email, setEmail] = useState(admin?.email || "");
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleTimeInput = (val: string) => {
@@ -55,21 +55,31 @@ export default function ReportMasjidTimeScreen() {
       Alert.alert("Invalid Time", "Please enter a valid hour (01-12) and minute (00-59).");
       return;
     }
-    if (!email.trim() || !email.includes("@")) {
-      Alert.alert("Valid Email Required", "Please enter a valid contact email.");
+    if (!phone.trim() || phone.length < 8) {
+      Alert.alert("Phone Number Required", "Please enter a valid contact phone number.");
       return;
     }
 
     setSubmitting(true);
     try {
       const displaySuggested = `${time} ${ampm}`;
+      const prayerLabel = PRAYER_NAMES[prayer as keyof typeof PRAYER_NAMES];
       await createMasjidMessage(
         masjidId,
         masjidName || "Masjid",
-        PRAYER_NAMES[prayer as keyof typeof PRAYER_NAMES],
+        prayerLabel,
         displaySuggested,
         message,
-        email
+        phone,
+        "timetable_update"
+      );
+
+      await createAdminNotification(
+        "Timetable Correction Request",
+        `${masjidName || "Masjid"}: Suggested ${prayerLabel} time is ${displaySuggested}.`,
+        "timetable_update",
+        masjidId,
+        masjidName || "Masjid"
       );
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -182,13 +192,13 @@ export default function ReportMasjidTimeScreen() {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Contact Email</Text>
+          <Text style={styles.label}>Contact Phone Number</Text>
           <TextInput
             style={styles.textInput}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            placeholder="yourname@example.com"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            placeholder="e.g. +91 9876543210"
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
           />

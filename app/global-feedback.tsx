@@ -23,22 +23,20 @@ export default function GlobalFeedbackScreen() {
   const { admin } = useAuth();
 
   const [message, setMessage] = useState("");
-  const [email, setEmail] = useState(admin?.email || "");
+  const [phone, setPhone] = useState("");
+  const [details, setDetails] = useState("");
+  const [idea, setIdea] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!message.trim()) {
-      Alert.alert("Message Required", "Please enter a message or issue description.");
-      return;
-    }
-    if (!email.trim() || !email.includes("@")) {
-      Alert.alert("Valid Email Required", "Please enter a valid contact email.");
+      Alert.alert("Subject Required", "Please enter a summary or subject for your feedback.");
       return;
     }
 
     setSubmitting(true);
     try {
-      await createAppMessage(email, message);
+      await createAppMessage(message, phone, details, idea);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
@@ -78,27 +76,50 @@ export default function GlobalFeedbackScreen() {
 
         {/* Form Fields */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Contact Email</Text>
+          <Text style={styles.label}>Contact Phone Number</Text>
           <TextInput
             style={styles.textInput}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            placeholder="yourname@example.com"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            placeholder="9219290912"
             placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
           />
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>What's on your mind?</Text>
+          <Text style={styles.label}>Subject / Summary</Text>
           <TextInput
-            style={[styles.textInput, styles.textArea]}
+            style={styles.textInput}
             value={message}
             onChangeText={setMessage}
+            placeholder="e.g., Bug on Quran page, translation issue..."
+            placeholderTextColor={Colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Additional Details</Text>
+          <TextInput
+            style={[styles.textInput, styles.textArea]}
+            value={details}
+            onChangeText={setDetails}
             multiline
-            numberOfLines={6}
-            placeholder="Please write details about any bugs you encountered or features you'd like to suggest..."
+            numberOfLines={4}
+            placeholder="Please write details about any bugs you encountered or issue steps..."
+            placeholderTextColor={Colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Suggest a Feature Idea</Text>
+          <TextInput
+            style={[styles.textInput, styles.textArea]}
+            value={idea}
+            onChangeText={setIdea}
+            multiline
+            numberOfLines={4}
+            placeholder="What feature would make this app even better? Share your ideas!"
             placeholderTextColor={Colors.textMuted}
           />
         </View>

@@ -191,15 +191,6 @@ export default function MasjidDetailScreen() {
           </View>
         )}
 
-        <View style={{ marginBottom: 20 }}>
-          <NativeMasjidAdCard 
-            headline="Support Your Local Masjid's Expansion"
-            body="Help fund new community spaces, Islamic classes, and educational infrastructure."
-            advertiser="Masjid Renovation Fund"
-            callToAction="Donate to Masjid"
-          />
-        </View>
-
         <Text style={styles.sectionTitle}>{t('prayer_timetable')}</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
 
@@ -220,6 +211,15 @@ export default function MasjidDetailScreen() {
             <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
             <Text style={styles.reportBtnText}>Report Incorrect Prayer Times</Text>
           </Pressable>
+        </View>
+
+        <View style={{ marginTop: 24, marginBottom: 10 }}>
+          <NativeMasjidAdCard 
+            headline="Support Your Local Masjid's Expansion"
+            body="Help fund new community spaces, Islamic classes, and educational infrastructure."
+            advertiser="Masjid Renovation Fund"
+            callToAction="Donate to Masjid"
+          />
         </View>
       </ScrollView>
       <PremiumBannerAd />

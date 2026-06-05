@@ -7,9 +7,10 @@ import { Surah } from '@/lib/quran/api';
 interface SurahCardProps {
   surah: Surah;
   onPress: () => void;
+  isRecent?: boolean;
 }
 
-const SurahCard: React.FC<SurahCardProps> = ({ surah, onPress }) => {
+const SurahCard: React.FC<SurahCardProps> = ({ surah, onPress, isRecent }) => {
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.numberBadge}>
@@ -17,18 +18,20 @@ const SurahCard: React.FC<SurahCardProps> = ({ surah, onPress }) => {
       </View>
 
       <View style={styles.infoContainer}>
-        <Text style={styles.englishName}>{surah.englishName}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.englishName}>{surah.englishName}</Text>
+          {isRecent && (
+            <Ionicons name="bookmark" size={14} color={Colors.accent} style={styles.bookmarkIcon} />
+          )}
+        </View>
         <Text style={styles.subInfo}>
-          {surah.revelationType} • {surah.numberOfAyahs} Ayat
+          {surah.englishNameTranslation} ({surah.numberOfAyahs})
         </Text>
       </View>
 
       <View style={styles.arabicContainer}>
         <Text style={styles.arabicName}>{surah.name}</Text>
-        <Text style={styles.translation}>{surah.englishNameTranslation}</Text>
       </View>
-
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
     </TouchableOpacity>
   );
 };
@@ -37,18 +40,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
   },
   numberBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.overlay,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -56,37 +58,38 @@ const styles = StyleSheet.create({
   numberText: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
-    color: Colors.primary,
+    color: '#FFFFFF',
   },
   infoContainer: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   englishName: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-    color: Colors.text,
+    color: Colors.primary,
     marginBottom: 2,
+  },
+  bookmarkIcon: {
+    marginLeft: 6,
   },
   subInfo: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
     color: Colors.textSecondary,
-    textTransform: 'capitalize',
   },
   arabicContainer: {
     alignItems: 'flex-end',
-    marginRight: 12,
+    justifyContent: 'center',
   },
   arabicName: {
-    fontFamily: 'Poppins_600SemiBold', // Fallback, system will handle Arabic
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 20,
-    color: Colors.primary,
-    marginBottom: 2,
-  },
-  translation: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    color: Colors.textMuted,
+    color: '#1A2E1A',
   },
 });
 

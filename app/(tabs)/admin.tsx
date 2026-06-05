@@ -15,7 +15,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getAllMasjids, getMasjidById } from "@/lib/store";
+import { getAllMasjids, getMasjidById, getAdminNotifications } from "@/lib/store";
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 
@@ -25,11 +25,25 @@ export default function AdminScreen() {
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [loadingMasjid, setLoadingMasjid] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
       setLoadingMasjid(true);
+
+      const fetchNotifications = async () => {
+        if (!admin) return;
+        try {
+          const data = await getAdminNotifications(admin.role, admin.masjidId);
+          const unread = data.filter((n) => !n.read).length;
+          if (isMounted) setUnreadCount(unread);
+        } catch (error) {
+          console.error("Failed to load notifications count:", error);
+        }
+      };
+
+      fetchNotifications();
 
       if (admin?.role === "super_admin") {
         (async () => {
@@ -157,9 +171,26 @@ export default function AdminScreen() {
               {admin.role === "super_admin" ? "Super Admin" : "Masjid Admin"}
             </Text>
           </View>
-          <Pressable onPress={handleLogout} style={styles.logoutBtn}>
-            <Ionicons name="log-out-outline" size={22} color={Colors.error} />
-          </Pressable>
+          <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/admin-notifications");
+              }}
+              style={styles.bellBtn}
+            >
+              <Ionicons name="notifications-outline" size={22} color={Colors.primary} />
+              {unreadCount > 0 && (
+                <View style={styles.badgeContainer}>
+                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </Pressable>
+            
+            <Pressable onPress={handleLogout} style={styles.logoutBtn}>
+              <Ionicons name="log-out-outline" size={22} color={Colors.error} />
+            </Pressable>
+          </View>
         </View>
 
         {admin.role === "super_admin" ? (
@@ -473,6 +504,37 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(192, 57, 43, 0.08)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  bellBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: Colors.overlay,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  badgeContainer: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.error,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
   },
   masjidInfoCard: {
     backgroundColor: Colors.surface,

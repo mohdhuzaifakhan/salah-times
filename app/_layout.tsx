@@ -17,6 +17,10 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
+import {
+  Amiri_400Regular,
+  Amiri_700Bold,
+} from "@expo-google-fonts/amiri";
 import Colors from "@/constants/colors";
 import { initializeAds } from "@/lib/ads";
 import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
@@ -81,6 +85,12 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="admin-notifications"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="manage-global-feedback"
         options={{
           headerShown: false,
@@ -108,6 +118,8 @@ export default function RootLayout() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    Amiri_400Regular,
+    Amiri_700Bold,
   });
 
   useEffect(() => {

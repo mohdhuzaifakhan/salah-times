@@ -38,23 +38,56 @@ export const fetchHadithByNumber = async (slug: string, number: number, lang: st
     // The slug provided is usually 'eng-bukhari'
     const editionSlug = slug.replace('eng-', `${lang}-`);
 
-    const [transRes, arabicRes] = await Promise.all([
-      axios.get(`${BASE_URL}/${editionSlug}/${number}.json`).catch(() => axios.get(`${BASE_URL}/${slug}/${number}.json`)),
-      axios.get(`${BASE_URL}/${slug.replace('eng-', 'ara-')}/${number}.json`).catch(() => ({ data: { hadiths: [] } }))
-    ]);
+    let transRes, arabicRes;
+    try {
+      [transRes, arabicRes] = await Promise.all([
+        axios.get(`${BASE_URL}/${editionSlug}/${number}.json`)
+          .catch(() => axios.get(`${BASE_URL}/${slug}/${number}.json`)),
+        axios.get(`${BASE_URL}/${slug.replace('eng-', 'ara-')}/${number}.json`)
+          .catch(() => ({ data: { hadiths: [] } }))
+      ]);
+    } catch (apiError) {
+      console.warn("API request failed:", apiError);
+      return {
+        hadithnumber: number,
+        arabicnumber: number,
+        text: "[Error loading Hadith. Please check your network connection.]",
+        arabicText: "",
+        grades: [],
+        error: true
+      };
+    }
 
-    const hadith = transRes.data.hadiths[0];
+    const hadith = transRes?.data?.hadiths?.[0];
+    if (!hadith) {
+      return {
+        hadithnumber: number,
+        arabicnumber: number,
+        text: "[Hadith not found.]",
+        arabicText: "",
+        grades: [],
+        error: true
+      };
+    }
+
     const data = {
       ...hadith,
-      arabicText: arabicRes.data.hadiths[0]?.text || '',
-      metadata: transRes.data.metadata
+      arabicText: arabicRes?.data?.hadiths?.[0]?.text || '',
+      metadata: transRes?.data?.metadata
     };
 
     MEMORY_CACHE[cacheKey] = data;
     return data;
   } catch (error) {
     console.error(`Error fetching hadith ${number} for ${slug}:`, error);
-    throw error;
+    return {
+      hadithnumber: number,
+      arabicnumber: number,
+      text: "[Error loading Hadith. Please check your network connection.]",
+      arabicText: "",
+      grades: [],
+      error: true
+    };
   }
 };
 

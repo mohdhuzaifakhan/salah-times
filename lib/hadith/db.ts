@@ -61,14 +61,27 @@ export const getHadithBookmarks = async (): Promise<HadithBookmark[]> => {
   if (!auth.currentUser) return [];
   const userId = auth.currentUser.uid;
   
-  const q = query(
-    collection(db, COLLECTIONS.BOOKMARKS),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HadithBookmark));
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.BOOKMARKS),
+      where('userId', '==', userId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const bookmarks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HadithBookmark));
+    
+    // Sort in memory by createdAt descending
+    bookmarks.sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+    
+    return bookmarks;
+  } catch (error) {
+    console.error("Failed to load hadith bookmarks:", error);
+    return [];
+  }
 };
 
 export const updateRecentHadith = async (recent: Omit<RecentHadith, 'updatedAt'>) => {

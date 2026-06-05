@@ -89,8 +89,8 @@ export default function ExploreScreen() {
     const result: (Masjid | { isAd: true; id: string })[] = [];
     filtered.forEach((item, index) => {
       result.push(item);
-      // Inject native ad after every 3rd masjid
-      if ((index + 1) % 3 === 0) {
+      // Inject native ad after every 9th masjid
+      if ((index + 1) % 9 === 0) {
         result.push({ isAd: true, id: `ad-${item.id}` });
       }
     });

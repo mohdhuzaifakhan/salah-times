@@ -311,7 +311,8 @@ export async function createMasjidMessage(
   prayerName: string,
   suggestedTime: string,
   message: string,
-  email: string
+  phone: string,
+  messageType: string = "timetable_update"
 ): Promise<any> {
   try {
     const msgRef = doc(collection(db, "masjid_messages"));
@@ -322,14 +323,90 @@ export async function createMasjidMessage(
       prayerName,
       suggestedTime,
       message,
-      email: email.toLowerCase(),
+      phone,
       createdAt: Date.now(),
+      messageType,
     };
     await setDoc(msgRef, newMsg);
     return newMsg;
   } catch (error) {
     console.error("Error creating masjid message:", error);
     throw error;
+  }
+}
+
+export async function createAdminNotification(
+  title: string,
+  body: string,
+  type: string,
+  masjidId: string,
+  masjidName?: string
+): Promise<any> {
+  try {
+    const notifRef = doc(collection(db, "admin_notifications"));
+    const newNotif = {
+      id: notifRef.id,
+      title,
+      body,
+      type,
+      masjidId,
+      masjidName: masjidName || "",
+      createdAt: Date.now(),
+      read: false,
+    };
+    await setDoc(notifRef, newNotif);
+    return newNotif;
+  } catch (error) {
+    console.error("Error creating admin notification:", error);
+    throw error;
+  }
+}
+
+export async function getAdminNotifications(
+  role: "super_admin" | "masjid_admin",
+  masjidId?: string
+): Promise<any[]> {
+  try {
+    let q;
+    if (role === "super_admin") {
+      q = query(collection(db, "admin_notifications"));
+    } else {
+      if (!masjidId) return [];
+      q = query(
+        collection(db, "admin_notifications"),
+        where("masjidId", "==", masjidId)
+      );
+    }
+    const querySnapshot = await getDocs(q);
+    const notifs: any[] = [];
+    querySnapshot.forEach((doc) => {
+      notifs.push(doc.data());
+    });
+    return notifs.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.error("Error getting admin notifications:", error);
+    return [];
+  }
+}
+
+export async function markNotificationAsRead(id: string): Promise<boolean> {
+  try {
+    const docRef = doc(db, "admin_notifications", id);
+    await updateDoc(docRef, { read: true });
+    return true;
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    return false;
+  }
+}
+
+export async function deleteAdminNotification(id: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "admin_notifications", id));
+    return true;
+  } catch (error) {
+    console.error("Error deleting admin notification:", error);
+    return false;
   }
 }
 
@@ -363,17 +440,24 @@ export async function deleteMasjidMessage(id: string): Promise<boolean> {
 
 // Global Support Tickets & App Feedback CRUD
 export async function createAppMessage(
-  email: string,
-  message: string
+  message: string,
+  phone?: string,
+  details?: string,
+  idea?: string,
+  email?: string
 ): Promise<any> {
   try {
     const msgRef = doc(collection(db, "app_messages"));
-    const newMsg = {
+    const newMsg: any = {
       id: msgRef.id,
-      email: email.toLowerCase(),
       message,
       createdAt: Date.now(),
     };
+    if (email) newMsg.email = email.toLowerCase();
+    if (phone) newMsg.phone = phone;
+    if (details) newMsg.details = details;
+    if (idea) newMsg.idea = idea;
+
     await setDoc(msgRef, newMsg);
     return newMsg;
   } catch (error) {

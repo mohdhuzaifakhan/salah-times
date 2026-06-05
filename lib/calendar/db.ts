@@ -52,14 +52,27 @@ export const getSavedEvents = async (): Promise<SavedEvent[]> => {
   if (!auth.currentUser) return [];
   const userId = auth.currentUser.uid;
   
-  const q = query(
-    collection(db, COLLECTIONS.SAVED_EVENTS),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedEvent));
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.SAVED_EVENTS),
+      where('userId', '==', userId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const events = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedEvent));
+    
+    // Sort in memory by createdAt descending
+    events.sort((a, b) => {
+      const aTime = a.createdAt?.seconds || 0;
+      const bTime = b.createdAt?.seconds || 0;
+      return bTime - aTime;
+    });
+    
+    return events;
+  } catch (error) {
+    console.error("Failed to load saved events:", error);
+    return [];
+  }
 };
 
 export const updateCalendarPrefs = async (prefs: any) => {

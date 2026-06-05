@@ -118,9 +118,10 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   arabicText: {
+    fontFamily: 'Amiri_400Regular',
     textAlign: 'right',
     color: Colors.text,
-    lineHeight: 45,
+    lineHeight: 48,
     marginBottom: 20,
   },
   englishText: {

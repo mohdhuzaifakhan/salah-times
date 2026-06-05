@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   getRecentRead, 
   getUserPreferences, 
@@ -50,6 +50,7 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     translationLanguage: 'en.sahih',
   });
   const [loading, setLoading] = useState(true);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadUserData = async () => {
     if (!auth.currentUser) {
@@ -116,7 +117,18 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateLastReadPage = async (pageNumber: number) => {
     setLastReadPageState(pageNumber);
-    await saveLastReadPage(pageNumber);
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await saveLastReadPage(pageNumber);
+      } catch (error) {
+        console.error("Failed to save last read page:", error);
+      }
+    }, 2000);
   };
 
   const updatePreferences = (prefs: Partial<QuranPreferences>) => {

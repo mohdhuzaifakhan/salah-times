@@ -77,7 +77,11 @@ export default function SurahDetailScreen() {
 
   const handlePlayAyah = (ayah: any) => {
     const url = getAudioUrl(Number(id), ayah.number);
-    playAudio(url);
+    if (isPlaying && currentUrl === url) {
+      togglePlayback();
+    } else {
+      playAudio(url);
+    }
   };
 
   if (loading) {
