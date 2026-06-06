@@ -5,10 +5,10 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -43,20 +43,20 @@ export default function ReportMasjidTimeScreen() {
   const handleSubmit = async () => {
     if (!masjidId) return;
     if (!time.trim()) {
-      Alert.alert("Time Required", "Please enter the suggested correct time.");
+      showCustomAlert("Time Required", "Please enter the suggested correct time.");
       return;
     }
     if (!/^\d{2}:\d{2}$/.test(time)) {
-      Alert.alert("Invalid Time format", "Please enter suggested time in HH:MM format.");
+      showCustomAlert("Invalid Time format", "Please enter suggested time in HH:MM format.");
       return;
     }
     const [h, m] = time.split(":").map(Number);
     if (h < 1 || h > 12 || m < 0 || m > 59) {
-      Alert.alert("Invalid Time", "Please enter a valid hour (01-12) and minute (00-59).");
+      showCustomAlert("Invalid Time", "Please enter a valid hour (01-12) and minute (00-59).");
       return;
     }
     if (!phone.trim() || phone.length < 8) {
-      Alert.alert("Phone Number Required", "Please enter a valid contact phone number.");
+      showCustomAlert("Phone Number Required", "Please enter a valid contact phone number.");
       return;
     }
 
@@ -83,14 +83,14 @@ export default function ReportMasjidTimeScreen() {
       );
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
+      showCustomAlert(
         "Report Submitted",
         "Thank you! Your feedback has been sent to the masjid admin for review.",
         [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (error) {
       console.error("Failed to submit feedback:", error);
-      Alert.alert("Submission Failed", "Something went wrong. Please check your internet connection.");
+      showCustomAlert("Submission Failed", "Something went wrong. Please check your internet connection.");
     } finally {
       setSubmitting(false);
     }

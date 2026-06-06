@@ -15,7 +15,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { fetchSurahDetail, SurahDetail, getAudioUrl } from '@/lib/quran/api';
+import { fetchSurahDetail, SurahDetail, getAudioUrl, fetchQuranPage } from '@/lib/quran/api';
+import { SURA_START_PAGES } from '@/lib/quran/constants';
 import { addBookmark, removeBookmark, updateRecentRead } from '@/lib/quran/db';
 import { useQuran } from '@/lib/quran/context';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
@@ -29,30 +30,134 @@ export default function SurahDetailScreen() {
   const { id } = useLocalSearchParams();
   const [surah, setSurah] = useState<SurahDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bgLoading, setBgLoading] = useState(false);
+  const [loadedPages, setLoadedPages] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const { bookmarks, refreshBookmarks, preferences } = useQuran();
   const { playAudio, isPlaying, togglePlayback, isLoading: audioLoading, currentUrl } = useAudioPlayer();
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (id) loadDetail();
+    let isMounted = true;
+    if (id) loadDetail(isMounted);
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
-  const loadDetail = async () => {
+  const loadDetail = async (isMounted: boolean) => {
     try {
       setLoading(true);
-      const data = await fetchSurahDetail(Number(id), preferences.translationLanguage);
-      setSurah(data);
+      const surahNum = Number(id);
+
+      const surahIndex = SURA_START_PAGES.findIndex(s => s.number === surahNum);
+      if (surahIndex === -1) {
+        throw new Error(`Surah ${surahNum} mapping not found.`);
+      }
+
+      const mapping = SURA_START_PAGES[surahIndex];
+      const startPage = mapping.startPage;
+      const nextStartPage = surahIndex < SURA_START_PAGES.length - 1 
+        ? SURA_START_PAGES[surahIndex + 1].startPage 
+        : 605;
+      const endPage = Math.max(startPage, nextStartPage - 1);
       
-      // Update recent read
+      const pageCount = endPage - startPage + 1;
+      if (isMounted) {
+        setTotalPages(pageCount);
+        setLoadedPages(1);
+      }
+
+      // Fetch first page immediately for instant display
+      const firstPageData = await fetchQuranPage(startPage, preferences.translationLanguage);
+      if (!isMounted) return;
+
+      const firstPageAyahs = firstPageData.ayahs.filter(a => a.surah.number === surahNum);
+
+      const initialSurah: SurahDetail = {
+        number: mapping.number,
+        name: mapping.name,
+        englishName: mapping.englishName,
+        englishNameTranslation: mapping.englishName,
+        numberOfAyahs: firstPageAyahs[0]?.surah.numberOfAyahs || 0,
+        revelationType: firstPageAyahs[0]?.surah.revelationType || "",
+        ayahs: firstPageAyahs.map(a => ({
+          number: a.number,
+          text: a.text,
+          numberInSurah: a.numberInSurah,
+          juz: a.juz,
+          page: a.page,
+          translation: a.translation || '',
+          audio: getAudioUrl(mapping.number, a.number),
+          audioSecondary: [],
+          manzil: 0,
+          ruku: 0,
+          hizbQuarter: 0,
+          sajda: false
+        }))
+      };
+
+      setSurah(initialSurah);
+      setLoading(false); // Disable spinner so user can start reading immediately
+
+      // Update recent read in database
       await updateRecentRead({
-        surahNumber: data.number,
+        surahNumber: initialSurah.number,
         ayahNumber: 1,
-        surahName: data.englishName
+        surahName: initialSurah.englishName
       });
+
+      // Stream the remaining pages in the background
+      if (pageCount > 1) {
+        if (isMounted) setBgLoading(true);
+
+        let accumulatedAyahs = [...initialSurah.ayahs];
+
+        for (let p = startPage + 1; p <= endPage; p++) {
+          try {
+            const pageData = await fetchQuranPage(p, preferences.translationLanguage);
+            if (!isMounted) return;
+
+            const pageAyahs = pageData.ayahs.filter(a => a.surah.number === surahNum);
+            if (pageAyahs.length > 0) {
+              const mapped = pageAyahs.map(a => ({
+                number: a.number,
+                text: a.text,
+                numberInSurah: a.numberInSurah,
+                juz: a.juz,
+                page: a.page,
+                translation: a.translation || '',
+                audio: getAudioUrl(mapping.number, a.number),
+                audioSecondary: [],
+                manzil: 0,
+                ruku: 0,
+                hizbQuarter: 0,
+                sajda: false
+              }));
+
+              accumulatedAyahs = [...accumulatedAyahs, ...mapped];
+              setSurah(prev => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  ayahs: accumulatedAyahs
+                };
+              });
+            }
+
+            if (isMounted) {
+              setLoadedPages(p - startPage + 1);
+            }
+          } catch (pageErr) {
+            console.error(`Error loading background page ${p} for Surah ${surahNum}:`, pageErr);
+          }
+        }
+
+        if (isMounted) setBgLoading(false);
+      }
     } catch (error) {
       console.error('Failed to load surah detail:', error);
-    } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   };
 
@@ -101,7 +206,13 @@ export default function SurahDetailScreen() {
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>{surah?.englishName}</Text>
-          <Text style={styles.headerSubtitle}>{surah?.name}</Text>
+          {bgLoading ? (
+            <Text style={[styles.headerSubtitle, { color: Colors.accent, fontFamily: 'Poppins_600SemiBold' }]}>
+              Downloading... {Math.round((loadedPages / totalPages) * 100)}%
+            </Text>
+          ) : (
+            <Text style={styles.headerSubtitle}>{surah?.name}</Text>
+          )}
         </View>
         <TouchableOpacity style={styles.settingsButton}>
           <Ionicons name="settings-outline" size={24} color={Colors.text} />

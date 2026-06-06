@@ -5,11 +5,11 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   Platform,
   Image,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +39,7 @@ export default function ManageEventsScreen() {
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [link, setLink] = useState("");
   const [expiryHours, setExpiryHours] = useState(24);
   const [saving, setSaving] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function ManageEventsScreen() {
       }
     } catch (error) {
       console.error("Failed to load events:", error);
-      Alert.alert("Error", "Could not load events.");
+      showCustomAlert("Error", "Could not load events.");
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ export default function ManageEventsScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert("Permission Denied", "We need permission to access your library to upload a flyer.");
+        showCustomAlert("Permission Denied", "We need permission to access your library to upload a flyer.");
         return;
       }
 
@@ -97,7 +98,7 @@ export default function ManageEventsScreen() {
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to select image.");
+      showCustomAlert("Error", "Failed to select image.");
     }
   };
 
@@ -108,7 +109,7 @@ export default function ManageEventsScreen() {
 
   const handleCreateEvent = async () => {
     if (!title.trim()) {
-      Alert.alert("Error", "Event title is required.");
+      showCustomAlert("Error", "Event title is required.");
       return;
     }
     if (!admin?.uid) return;
@@ -123,23 +124,25 @@ export default function ManageEventsScreen() {
         masjidId: masjidId!,
         createdBy: admin.uid,
         imageUrl: imageUri || undefined,
+        link: link.trim() || undefined,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTitle("");
       setDescription("");
+      setLink("");
       setImageUri(null);
       loadEvents();
     } catch (error) {
       console.error("Failed to create event:", error);
-      Alert.alert("Error", "Could not create event.");
+      showCustomAlert("Error", "Could not create event.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (eventId: string) => {
-    Alert.alert("Delete Event", "Are you sure you want to delete this event?", [
+    showCustomAlert("Delete Event", "Are you sure you want to delete this event?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -151,7 +154,7 @@ export default function ManageEventsScreen() {
             loadEvents();
           } catch (error) {
             console.error("Failed to delete event:", error);
-            Alert.alert("Error", "Could not delete event.");
+            showCustomAlert("Error", "Could not delete event.");
           }
         },
       },
@@ -204,6 +207,18 @@ export default function ManageEventsScreen() {
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+          />
+
+          <Text style={styles.label}>Website Link / URL (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={link}
+            onChangeText={setLink}
+            placeholder="E.g. https://example.com/event-registration"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
           />
 
           <Text style={styles.label}>Event Flyer / Image (Optional)</Text>

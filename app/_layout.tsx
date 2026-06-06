@@ -2,6 +2,8 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
+import CustomAlertModal from "@/components/CustomAlertModal";
+import AppUpdateChecker from "@/components/AppUpdateChecker";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -143,6 +145,8 @@ export default function RootLayout() {
                 <GestureHandlerRootView style={styles.container}>
                   <View style={styles.content}>
                     <RootLayoutNav />
+                    <CustomAlertModal />
+                    <AppUpdateChecker />
                   </View>
                 </GestureHandlerRootView>
               </CalendarProvider>

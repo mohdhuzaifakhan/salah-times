@@ -14,8 +14,10 @@ const PRAYER_ICONS: Record<string, string> = {
 };
 
 function formatTime(time: string): string {
+  if (!time || !time.includes(":")) return "--:--";
   const [h, m] = time.split(":");
   const hour = parseInt(h, 10);
+  if (isNaN(hour)) return "--:--";
   const ampm = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${m} ${ampm}`;
@@ -67,25 +69,38 @@ export function PrayerTimesCard({ timetable }: { timetable: Timetable }) {
   const dailyPrayers: (keyof Timetable)[] = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
 
   let nextPrayer: keyof Timetable | null = null;
-  for (const prayer of dailyPrayers) {
-    const [h, m] = timetable[prayer].split(":");
-    const prayerMinutes = parseInt(h, 10) * 60 + parseInt(m, 10);
-    if (prayerMinutes > currentMinutes) {
-      nextPrayer = prayer;
-      break;
+  if (timetable) {
+    for (const prayer of dailyPrayers) {
+      const time = timetable[prayer];
+      if (time && time.includes(":")) {
+        const [h, m] = time.split(":");
+        const prayerMinutes = parseInt(h, 10) * 60 + parseInt(m, 10);
+        if (!isNaN(prayerMinutes) && prayerMinutes > currentMinutes) {
+          nextPrayer = prayer;
+          break;
+        }
+      }
     }
   }
 
   return (
     <View style={styles.card}>
-      {PRAYER_ORDER.map((prayer) => (
-        <PrayerTimeRow
-          key={prayer}
-          prayer={prayer}
-          time={timetable[prayer]}
-          isNext={prayer === nextPrayer}
-        />
-      ))}
+      {timetable ? (
+        PRAYER_ORDER.map((prayer) => (
+          <PrayerTimeRow
+            key={prayer}
+            prayer={prayer}
+            time={timetable[prayer]}
+            isNext={prayer === nextPrayer}
+          />
+        ))
+      ) : (
+        <View style={{ padding: 16, alignItems: "center" }}>
+          <Text style={{ fontFamily: "Poppins_400Regular", color: Colors.textMuted }}>
+            No prayer times available
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

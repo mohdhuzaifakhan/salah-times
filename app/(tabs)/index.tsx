@@ -8,9 +8,9 @@ import {
   TextInput,
   RefreshControl,
   Platform,
-  Alert,
   Pressable,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -61,7 +61,7 @@ export default function ExploreScreen() {
       }
     } catch (error) {
       console.error("Failed to load data:", error);
-      Alert.alert("Error", "Failed to load data. Please try again.");
+      showCustomAlert("Error", "Failed to load data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -162,7 +162,7 @@ export default function ExploreScreen() {
           }
           ListHeaderComponent={
             <View style={{ marginBottom: 8 }}>
-              {primaryMasjid ? (
+              {primaryMasjid && primaryMasjid.timetable ? (
                 <Pressable
                   style={({ pressed }) => [
                     styles.primaryCard,

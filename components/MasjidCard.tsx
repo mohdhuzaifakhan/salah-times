@@ -6,14 +6,17 @@ import { Masjid } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
 function formatTime(time: string): string {
+  if (!time || !time.includes(":")) return "--:--";
   const [h, m] = time.split(":");
   const hour = parseInt(h, 10);
+  if (isNaN(hour)) return "--:--";
   const ampm = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${m} ${ampm}`;
 }
 
 function getNextPrayer(timetable: Masjid["timetable"]): { name: string; time: string } | null {
+  if (!timetable) return null;
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const prayers = [
@@ -22,11 +25,17 @@ function getNextPrayer(timetable: Masjid["timetable"]): { name: string; time: st
     { name: "Asr", time: timetable.asr },
     { name: "Maghrib", time: timetable.maghrib },
     { name: "Isha", time: timetable.isha },
-  ];
+  ].filter(p => !!p.time);
+  
+  if (prayers.length === 0) return null;
+  
   for (const p of prayers) {
-    const [h, m] = p.time.split(":");
-    if (parseInt(h, 10) * 60 + parseInt(m, 10) > currentMinutes) {
-      return p;
+    const parts = p.time.split(":");
+    if (parts.length === 2) {
+      const [h, m] = parts;
+      if (parseInt(h, 10) * 60 + parseInt(m, 10) > currentMinutes) {
+        return p;
+      }
     }
   }
   return prayers[0];
@@ -41,7 +50,7 @@ export function MasjidCard({
   onPress: () => void;
   isPrimary?: boolean;
 }) {
-  const next = getNextPrayer(masjid.timetable);
+  const next = masjid.timetable ? getNextPrayer(masjid.timetable) : null;
 
   return (
     <Pressable
@@ -83,20 +92,22 @@ export function MasjidCard({
           <Text style={styles.nextTime}>{formatTime(next.time)}</Text>
         </View>
       )}
-      <View style={styles.timesRow}>
-        {[
-          { label: "F", time: masjid.timetable.fajr },
-          { label: "D", time: masjid.timetable.dhuhr },
-          { label: "A", time: masjid.timetable.asr },
-          { label: "M", time: masjid.timetable.maghrib },
-          { label: "I", time: masjid.timetable.isha },
-        ].map((item) => (
-          <View key={item.label} style={styles.timeItem}>
-            <Text style={styles.timeLabel}>{item.label}</Text>
-            <Text style={styles.timeValue}>{formatTime(item.time)}</Text>
-          </View>
-        ))}
-      </View>
+      {masjid.timetable ? (
+        <View style={styles.timesRow}>
+          {[
+            { label: "F", time: masjid.timetable.fajr },
+            { label: "D", time: masjid.timetable.dhuhr },
+            { label: "A", time: masjid.timetable.asr },
+            { label: "M", time: masjid.timetable.maghrib },
+            { label: "I", time: masjid.timetable.isha },
+          ].map((item) => (
+            <View key={item.label} style={styles.timeItem}>
+              <Text style={styles.timeLabel}>{item.label}</Text>
+              <Text style={styles.timeValue}>{item.time ? formatTime(item.time) : "--:--"}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </Pressable>
   );
 }

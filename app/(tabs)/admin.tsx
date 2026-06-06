@@ -6,16 +6,17 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Platform,
+  TextInput,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getAllMasjids, getMasjidById, getAdminNotifications } from "@/lib/store";
+import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, getAppMessages } from "@/lib/store";
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 
@@ -26,6 +27,12 @@ export default function AdminScreen() {
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [loadingMasjid, setLoadingMasjid] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stats, setStats] = useState({
+    totalMasjids: 0,
+    totalEvents: 0,
+    totalFeedbacks: 0,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -48,9 +55,17 @@ export default function AdminScreen() {
       if (admin?.role === "super_admin") {
         (async () => {
           try {
-            const data = await getAllMasjids();
+            const masjidsData = await getAllMasjids();
+            const eventsData = await getGlobalEvents();
+            const feedbacksData = await getAppMessages();
+
             if (isMounted) {
-              setMasjids(data);
+              setMasjids(masjidsData);
+              setStats({
+                totalMasjids: masjidsData.length,
+                totalEvents: eventsData.length,
+                totalFeedbacks: feedbacksData.length,
+              });
               setMasjid(null);
             }
           } catch (error) {
@@ -85,7 +100,7 @@ export default function AdminScreen() {
   );
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
+    showCustomAlert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Logout",
@@ -157,6 +172,12 @@ export default function AdminScreen() {
     );
   }
 
+  const filteredMasjids = masjids.filter(
+    (m) =>
+      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.city.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
       <ScrollView
@@ -186,7 +207,7 @@ export default function AdminScreen() {
                 </View>
               )}
             </Pressable>
-            
+
             <Pressable onPress={handleLogout} style={styles.logoutBtn}>
               <Ionicons name="log-out-outline" size={22} color={Colors.error} />
             </Pressable>
@@ -195,97 +216,200 @@ export default function AdminScreen() {
 
         {admin.role === "super_admin" ? (
           <>
-            <Pressable
-              style={({ pressed }) => [
-                styles.registerButton,
-                pressed && styles.btnPressed,
-              ]}
-              onPress={() => router.push("/(auth)/register")}
-            >
-              <Ionicons name="add-circle-outline" size={18} color="#fff" />
-              <Text style={styles.registerButtonText}>Register New Masjid</Text>
-            </Pressable>
+            {/* Stats Cards Row */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconBadge, { backgroundColor: "rgba(13, 115, 119, 0.08)" }]}>
+                  <Ionicons name="moon-outline" size={18} color={Colors.primary} />
+                </View>
+                <Text style={styles.statValue}>{stats.totalMasjids}</Text>
+                <Text style={styles.statLabel}>Masjids</Text>
+              </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.registerButton,
-                { backgroundColor: Colors.accent, marginTop: -4 },
-                pressed && styles.btnPressed,
-              ]}
-              onPress={() => router.push({ pathname: "/manage-events", params: { masjidId: "global" } })}
-            >
-              <Ionicons name="megaphone-outline" size={18} color="#fff" />
-              <Text style={styles.registerButtonText}>Manage Global Events</Text>
-            </Pressable>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconBadge, { backgroundColor: "rgba(212, 168, 67, 0.08)" }]}>
+                  <Ionicons name="megaphone-outline" size={18} color={Colors.accent} />
+                </View>
+                <Text style={styles.statValue}>{stats.totalEvents}</Text>
+                <Text style={styles.statLabel}>Global Events</Text>
+              </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.registerButton,
-                { backgroundColor: "#5C6B5C", marginTop: -4 },
-                pressed && styles.btnPressed,
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push("/manage-global-feedback");
-              }}
-            >
-              <Ionicons name="mail-unread-outline" size={18} color="#fff" />
-              <Text style={styles.registerButtonText}>Manage App Feedbacks</Text>
-            </Pressable>
+              <View style={styles.statCard}>
+                <View style={[styles.statIconBadge, { backgroundColor: "rgba(92, 107, 92, 0.08)" }]}>
+                  <Ionicons name="mail-unread-outline" size={18} color="#5C6B5C" />
+                </View>
+                <Text style={styles.statValue}>{stats.totalFeedbacks}</Text>
+                <Text style={styles.statLabel}>App Feedbacks</Text>
+              </View>
+            </View>
 
-            {masjids.length === 0 ? (
+            {/* Quick Actions Grid */}
+            <Text style={styles.sectionHeaderTitle}>Quick Actions</Text>
+            <View style={styles.actionGrid}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/(auth)/register");
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(13, 115, 119, 0.08)" }]}>
+                  <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionTitle}>Add Masjid</Text>
+                <Text style={styles.actionDesc}>Register new account</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({ pathname: "/manage-events", params: { masjidId: "global" } });
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(212, 168, 67, 0.08)" }]}>
+                  <Ionicons name="megaphone-outline" size={22} color={Colors.accent} />
+                </View>
+                <Text style={styles.actionTitle}>Global Events</Text>
+                <Text style={styles.actionDesc}>Manage announcements</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/manage-global-feedback");
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(92, 107, 92, 0.08)" }]}>
+                  <Ionicons name="mail-unread-outline" size={22} color="#5C6B5C" />
+                </View>
+                <Text style={styles.actionTitle}>Feedbacks</Text>
+                <Text style={styles.actionDesc}>Manage app feedback</Text>
+              </Pressable>
+            </View>
+
+            {/* Directory Header and Search Bar */}
+            <View style={styles.directoryHeader}>
+              <Text style={styles.sectionHeaderTitle}>Masjids Directory</Text>
+              <View style={styles.directoryCountBadge}>
+                <Text style={styles.directoryCountText}>{filteredMasjids.length} listed</Text>
+              </View>
+            </View>
+
+            <View style={styles.searchBarContainer}>
+              <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search masjids by name or city..."
+                placeholderTextColor={Colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery("")} style={styles.searchClearBtn}>
+                  <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+
+            {/* Masjid Cards List */}
+            {filteredMasjids.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No masjids registered</Text>
-                <Text style={styles.emptyText}>
-                  Use "Register New Masjid" to create the first masjid account.
+                <Ionicons name="search-outline" size={32} color={Colors.textMuted} style={{ alignSelf: "center", marginBottom: 8 }} />
+                <Text style={[styles.emptyTitle, { textAlign: "center" }]}>No masjids found</Text>
+                <Text style={[styles.emptyText, { textAlign: "center" }]}>
+                  Try adjusting your search terms or register a new masjid admin.
                 </Text>
               </View>
             ) : (
-              masjids.map((item) => (
-                <View key={item.id} style={styles.superMasjidCard}>
-                  <View style={styles.superMasjidHeader}>
-                    <View style={styles.masjidInfoText}>
-                      <Text style={styles.masjidName}>{item.name}</Text>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
-                        <Text style={styles.masjidLocation} numberOfLines={1}>
-                          {item.address}, {item.city}
-                        </Text>
+              filteredMasjids.map((item) => {
+                const masjidInitials = item.name
+                  ? item.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()
+                  : "M";
+
+                return (
+                  <View key={item.id} style={styles.superMasjidCard}>
+                    <View style={styles.superMasjidHeader}>
+                      <View style={styles.avatarBadge}>
+                        <Text style={styles.avatarBadgeText}>{masjidInitials}</Text>
+                      </View>
+
+                      <View style={styles.masjidInfoText}>
+                        <Text style={styles.masjidName}>{item.name}</Text>
+                        <View style={styles.locationRow}>
+                          <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+                          <Text style={styles.masjidLocation} numberOfLines={1}>
+                            {item.address}, {item.city}
+                          </Text>
+                        </View>
+                        {item.adminEmail && (
+                          <View style={styles.emailRow}>
+                            <Ionicons name="mail-outline" size={12} color={Colors.textMuted} />
+                            <Text style={styles.emailText} numberOfLines={1}>
+                              {item.adminEmail}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
-                  </View>
 
-                  <View style={styles.superMasjidFooter}>
-                    <Pressable
-                      style={styles.superEditBtn}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push({
-                          pathname: "/edit-timetable",
-                          params: { masjidId: item.id },
-                        });
-                      }}
-                    >
-                      <Ionicons name="time-outline" size={16} color={Colors.primary} />
-                      <Text style={styles.superEditBtnText}>Update Timetable</Text>
-                    </Pressable>
+                    <View style={styles.superMasjidFooter}>
+                      <Pressable
+                        style={styles.superEditBtn}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push({
+                            pathname: "/edit-timetable",
+                            params: { masjidId: item.id },
+                          });
+                        }}
+                      >
+                        <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                        <Text style={styles.superEditBtnText}>Timetable</Text>
+                      </Pressable>
 
-                    <Pressable
-                      style={styles.superFeedbackBtn}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push({
-                          pathname: "/masjid-feedback",
-                          params: { masjidId: item.id, masjidName: item.name },
-                        });
-                      }}
-                    >
-                      <Ionicons name="mail-unread-outline" size={16} color={Colors.accent} />
-                      <Text style={styles.superFeedbackBtnText}>View Feedbacks</Text>
-                    </Pressable>
+                      <Pressable
+                        style={styles.superFeedbackBtn}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push({
+                            pathname: "/masjid-feedback",
+                            params: { masjidId: item.id, masjidName: item.name },
+                          });
+                        }}
+                      >
+                        <Ionicons name="mail-unread-outline" size={14} color={Colors.accent} />
+                        <Text style={styles.superFeedbackBtnText}>Feedbacks</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={styles.superManageBtn}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push({
+                            pathname: "/edit-masjid-details",
+                            params: { masjidId: item.id },
+                          });
+                        }}
+                      >
+                        <Ionicons name="settings-outline" size={14} color="#5C6B5C" />
+                        <Text style={styles.superManageBtnText}>Manage Info</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </>
         ) : masjid ? (
@@ -563,20 +687,32 @@ const styles = StyleSheet.create({
   superMasjidCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
   superMasjidHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    gap: 14,
+  },
+  avatarBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.overlay,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadgeText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: Colors.primary,
   },
   masjidName: {
     fontFamily: "Poppins_700Bold",
-    fontSize: 18,
+    fontSize: 16,
     color: Colors.text,
   },
   locationRow: {
@@ -590,6 +726,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     flex: 1,
+  },
+  emailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  emailText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -636,11 +783,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    padding: 16,
+    padding: 24,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text,
     marginBottom: 4,
   },
@@ -648,6 +796,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 18,
   },
   editLocalityBtn: {
     flexDirection: "row",
@@ -666,8 +815,8 @@ const styles = StyleSheet.create({
   superMasjidFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
-    marginTop: 12,
+    gap: 8,
+    marginTop: 14,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
     paddingTop: 12,
@@ -677,7 +826,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: Colors.overlay,
     borderRadius: 8,
     paddingVertical: 8,
@@ -686,7 +835,7 @@ const styles = StyleSheet.create({
   },
   superEditBtnText: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.primary,
   },
   superFeedbackBtn: {
@@ -694,7 +843,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: "rgba(212, 168, 67, 0.08)",
     borderRadius: 8,
     paddingVertical: 8,
@@ -703,7 +852,142 @@ const styles = StyleSheet.create({
   },
   superFeedbackBtnText: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.accent,
+  },
+  superManageBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "rgba(92, 107, 92, 0.06)",
+    borderRadius: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(92, 107, 92, 0.12)",
+  },
+  superManageBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+
+  // Upgraded Super Admin Layout styles
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    alignItems: "center",
+  },
+  statIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  statValue: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: Colors.text,
+  },
+  statLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 10,
+    color: Colors.textMuted,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  sectionHeaderTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  actionGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 24,
+  },
+  actionCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    alignItems: "center",
+  },
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  actionTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: Colors.text,
+    textAlign: "center",
+  },
+  actionDesc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 9,
+    color: Colors.textMuted,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  directoryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  directoryCountBadge: {
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  directoryCountText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  searchBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: Colors.text,
+    padding: 0,
+  },
+  searchClearBtn: {
+    padding: 2,
   },
 });

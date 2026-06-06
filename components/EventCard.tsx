@@ -70,8 +70,16 @@ export function EventCard({ event, onDelete, isAdmin, onPress }: EventCardProps)
         ) : null}
 
         <View style={styles.footer}>
-          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-          <Text style={styles.footerText}>Expires: {endDateStr}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.footerText}>Expires: {endDateStr}</Text>
+          </View>
+          {event.link && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: "auto" }}>
+              <Ionicons name="link-outline" size={14} color={Colors.primary} />
+              <Text style={[styles.footerText, { color: Colors.primary, fontFamily: "Poppins_600SemiBold" }]}>Link Available</Text>
+            </View>
+          )}
         </View>
       </View>
     </Pressable>

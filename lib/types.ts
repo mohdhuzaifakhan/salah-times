@@ -23,6 +23,7 @@ export interface AdminUser {
   email: string;
   role: "super_admin" | "masjid_admin";
   masjidId?: string;
+  password?: string;
 }
 
 export const DEFAULT_TIMETABLE: Timetable = {
@@ -61,4 +62,5 @@ export interface AppEvent {
   createdBy: string;
   createdAt: number;
   imageUrl?: string;
+  link?: string;
 }

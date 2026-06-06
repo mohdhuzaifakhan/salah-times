@@ -5,10 +5,10 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -30,7 +30,7 @@ export default function GlobalFeedbackScreen() {
 
   const handleSubmit = async () => {
     if (!message.trim()) {
-      Alert.alert("Subject Required", "Please enter a summary or subject for your feedback.");
+      showCustomAlert("Subject Required", "Please enter a summary or subject for your feedback.");
       return;
     }
 
@@ -39,14 +39,14 @@ export default function GlobalFeedbackScreen() {
       await createAppMessage(message, phone, details, idea);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
+      showCustomAlert(
         "Feedback Submitted",
         "Thank you! Your feedback has been sent directly to the development team.",
         [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (error) {
       console.error("Failed to submit app feedback:", error);
-      Alert.alert("Submission Failed", "Something went wrong. Please check your internet connection.");
+      showCustomAlert("Submission Failed", "Something went wrong. Please check your internet connection.");
     } finally {
       setSubmitting(false);
     }

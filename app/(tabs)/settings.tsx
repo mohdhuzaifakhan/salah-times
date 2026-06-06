@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Alert, Linking, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Linking, Share, Platform, ActivityIndicator } from 'react-native';
+import { showCustomAlert } from '@/lib/custom-alert';
+import { fetchAppUpdateConfig, compareVersions, CURRENT_VERSION } from '@/lib/updates';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +24,43 @@ export default function SettingsScreen() {
 
   const [primaryMasjidName, setPrimaryMasjidName] = useState<string | null>(null);
   const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  const handleManualUpdateCheck = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const config = await fetchAppUpdateConfig();
+      const updateAvailable = compareVersions(CURRENT_VERSION, config.latestVersion) < 0;
+      if (updateAvailable) {
+        showCustomAlert(
+          "New Update Available",
+          `Version ${config.latestVersion} is available. Release notes:\n\n${config.releaseNotes.map(n => `• ${n}`).join('\n')}`,
+          [
+            { text: "Later", style: "cancel" },
+            {
+              text: "Update Now",
+              onPress: () => {
+                const url = Platform.OS === 'ios' ? config.appStoreUrl : config.playStoreUrl;
+                Linking.openURL(url).catch(() => Linking.openURL(config.playStoreUrl));
+              }
+            }
+          ]
+        );
+      } else {
+        showCustomAlert(
+          "Up to Date",
+          `Salah Times is up to date!\n\nCurrent version: v${CURRENT_VERSION}`
+        );
+      }
+    } catch (error) {
+      console.error("Manual update check failed:", error);
+      showCustomAlert("Check Failed", "Unable to check for updates at this time. Please try again later.");
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   const loadPrimaryMasjid = useCallback(async () => {
     try {
@@ -45,7 +84,7 @@ export default function SettingsScreen() {
   );
 
   const handleUnlinkPrimary = async () => {
-    Alert.alert(
+    showCustomAlert(
       "Unlink Primary Masjid",
       "Are you sure you want to remove your primary masjid? You will no longer see its quick access dashboard on the Home tab.",
       [
@@ -65,7 +104,7 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showCustomAlert(
       t('logout'),
       'Are you sure you want to logout?',
       [
@@ -77,9 +116,9 @@ export default function SettingsScreen() {
 
   const handleAbout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
+    showCustomAlert(
       t('about_us'),
-      'Salah Time App v1.0.0\n\nA comprehensive Islamic companion for prayer times, Quran, and Hadith.\n\nDeveloped with ❤️ for the Ummah.',
+      'Salah Time App v1.0.0\n\nA comprehensive Islamic companion for prayer times and Quran.\n\nDeveloped with ❤️ for the Ummah.',
       [
         {
           text: 'Contact Developer',
@@ -109,14 +148,14 @@ export default function SettingsScreen() {
     const storeUrl = 'https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes';
     Linking.openURL(storeUrl).catch((err) => {
       console.error("Failed to open rating store URL:", err);
-      Alert.alert("Error", "Could not open App Store link.");
+      showCustomAlert("Error", "Could not open App Store link.");
     });
   };
 
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: `Assalamu Alaikum! Download the Salah Times app to track active masjid prayer times, read Quran, Hadith, and view the Islamic calendar: https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes`,
+        message: `Assalamu Alaikum! Download the Salah Times app to track active masjid prayer times, read Quran, and view the Islamic calendar: https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes`,
       });
     } catch (error) {
       console.error("Share failed:", error);
@@ -124,7 +163,7 @@ export default function SettingsScreen() {
   };
 
   const handleNotifications = () => {
-    Alert.alert(
+    showCustomAlert(
       t('notifications'),
       'Notification settings are currently managed globally. You will receive alerts for all prayer times.',
       [{ text: 'OK' }]
@@ -205,7 +244,7 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('hadith')}</Text>
 
           <SettingItem
@@ -262,7 +301,7 @@ export default function SettingsScreen() {
               </View>
             }
           />
-        </View>
+        </View> */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('app_section')}</Text>
@@ -292,8 +331,21 @@ export default function SettingsScreen() {
             icon="color-palette-outline"
             title={t('appearance')}
             subtitle="Light Mode"
-            onPress={() => Alert.alert(t('appearance'), 'Dark mode coming soon!')}
+            onPress={() => showCustomAlert(t('appearance'), 'Dark mode coming soon!')}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="cloud-download-outline"
+            title="Check for Updates"
+            subtitle="Keep your app up to date"
+            onPress={handleManualUpdateCheck}
+            rightElement={
+              checkingUpdate ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              )
+            }
           />
         </View>
 
@@ -320,13 +372,13 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <NativeHadithAdCard
             headline="Learn Arabic with Al-Quran Academy"
             body="Understand the vocabulary of the Holy Quran with bite-sized daily lessons and quizzes."
             callToAction="Get 7 Days Free"
           />
-        </View>
+        </View> */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('support_section')}</Text>

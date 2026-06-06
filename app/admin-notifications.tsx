@@ -6,10 +6,10 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   StatusBar,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,7 +64,7 @@ export default function AdminNotificationsScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert(
+    showCustomAlert(
       "Delete Notification",
       "Are you sure you want to delete this notification?",
       [
@@ -79,7 +79,7 @@ export default function AdminNotificationsScreen() {
               setNotifications((prev) => prev.filter((n) => n.id !== id));
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } else {
-              Alert.alert("Error", "Failed to delete notification.");
+              showCustomAlert("Error", "Failed to delete notification.");
             }
           },
         },

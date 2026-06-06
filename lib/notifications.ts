@@ -37,6 +37,10 @@ async function ensureAndroidChannel() {
  * for the given primary masjid.
  */
 export async function schedulePrimaryMasjidNotifications(masjid: Masjid) {
+  if (!masjid || !masjid.timetable) {
+    console.warn("No timetable available for scheduling notifications.");
+    return;
+  }
   try {
     // 1. Request permissions if not already granted
     const { status } = await Notifications.requestPermissionsAsync();

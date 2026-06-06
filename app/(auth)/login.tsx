@@ -5,12 +5,12 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -26,7 +26,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing Fields", "Please enter both email and password.");
+      showCustomAlert("Missing Fields", "Please enter both email and password.");
       return;
     }
     setLoading(true);
@@ -37,7 +37,7 @@ export default function LoginScreen() {
       router.dismissAll();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Login Failed", result.error || "Invalid email or password.");
+      showCustomAlert("Login Failed", result.error || "Invalid email or password.");
     }
   };
 

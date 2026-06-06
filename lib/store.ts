@@ -132,7 +132,7 @@ export async function updateMasjidTimetable(
 
 export async function updateMasjidDetails(
   id: string,
-  details: Partial<Pick<Masjid, "name" | "city" | "address">>
+  details: Partial<Masjid>
 ): Promise<Masjid | null> {
   try {
     const masjidRef = doc(db, MASJIDS_COLLECTION, id);
@@ -143,6 +143,7 @@ export async function updateMasjidDetails(
     return null;
   }
 }
+
 
 export async function deleteMasjid(id: string): Promise<boolean> {
   try {
@@ -159,7 +160,8 @@ export async function createUserProfile(
   uid: string,
   email: string,
   role: AdminUser["role"],
-  masjidId?: string
+  masjidId?: string,
+  password?: string
 ) {
   try {
     const userRef = doc(db, USERS_COLLECTION, uid);
@@ -171,6 +173,10 @@ export async function createUserProfile(
 
     if (masjidId) {
       userData.masjidId = masjidId;
+    }
+
+    if (password) {
+      userData.password = password;
     }
 
     await setDoc(userRef, userData);
@@ -195,15 +201,40 @@ export async function getUserProfile(uid: string): Promise<AdminUser | null> {
   }
 }
 
+export async function getUserProfileByEmail(email: string): Promise<AdminUser | null> {
+  try {
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where("email", "==", email.trim().toLowerCase()),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].data() as AdminUser;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting user profile by email:", error);
+    return null;
+  }
+}
+
+
 // Events Management
 export async function createEvent(data: Omit<AppEvent, "id" | "createdAt">): Promise<AppEvent> {
   try {
     const newEventRef = doc(collection(db, EVENTS_COLLECTION));
+    
+    // Clean undefined fields to prevent Firestore from throwing "Unsupported field value: undefined"
+    const cleanedData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+
     const newEvent: AppEvent = {
-      ...data,
+      ...cleanedData,
       id: newEventRef.id,
       createdAt: Date.now(),
-    };
+    } as AppEvent;
 
     await setDoc(newEventRef, newEvent);
     return newEvent;

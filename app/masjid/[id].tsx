@@ -24,8 +24,10 @@ import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
 import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 
 function formatTime(time: string): string {
+  if (!time || !time.includes(":")) return "--:--";
   const [h, m] = time.split(":");
   const hour = parseInt(h, 10);
+  if (isNaN(hour)) return "--:--";
   const ampm = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${m} ${ampm}`;
@@ -100,7 +102,10 @@ export default function MasjidDetailScreen() {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const times = PRAYER_ORDER
-        .map((p) => `${PRAYER_NAMES[p]}: ${formatTime(masjid.timetable[p])}`)
+        .map((p) => {
+          const timeVal = masjid.timetable?.[p];
+          return `${PRAYER_NAMES[p]}: ${timeVal ? formatTime(timeVal) : "--:--"}`;
+        })
         .join("\n");
       await Share.share({
         message: `${masjid.name}\n${masjid.address}, ${masjid.city}\n\nPrayer Times:\n${times}`,

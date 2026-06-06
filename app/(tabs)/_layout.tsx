@@ -18,10 +18,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "book", selected: "book.fill" }} />
         <Label>Quran</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="hadith">
+      {/* <NativeTabs.Trigger name="hadith">
         <Icon sf={{ default: "books.vertical", selected: "books.vertical.fill" }} />
         <Label>Hadith</Label>
-      </NativeTabs.Trigger>
+      </NativeTabs.Trigger> */}
       <NativeTabs.Trigger name="calendar">
         <Icon sf={{ default: "calendar", selected: "calendar" }} />
         <Label>Calendar</Label>
@@ -100,6 +100,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="hadith"
         options={{
+          href: null,
           title: "Hadith",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />

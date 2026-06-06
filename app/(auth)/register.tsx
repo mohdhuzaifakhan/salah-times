@@ -5,12 +5,12 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -38,15 +38,15 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!admin || admin.role !== "super_admin") {
-      Alert.alert("Not Allowed", "Only super admin can register masjid accounts.");
+      showCustomAlert("Not Allowed", "Only super admin can register masjid accounts.");
       return;
     }
     if (!email.trim() || !password.trim() || !masjidName.trim() || !city.trim() || !address.trim()) {
-      Alert.alert("Missing Fields", "Please fill in all fields.");
+      showCustomAlert("Missing Fields", "Please fill in all fields.");
       return;
     }
     if (password.length < 6) {
-      Alert.alert("Weak Password", "Password must be at least 6 characters.");
+      showCustomAlert("Weak Password", "Password must be at least 6 characters.");
       return;
     }
     setLoading(true);
@@ -54,16 +54,16 @@ export default function RegisterScreen() {
       const result = await register(email.trim(), password, masjidName.trim(), city.trim(), address.trim());
       if (result.error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert("Registration Failed", result.error);
+        showCustomAlert("Registration Failed", result.error);
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Your masjid has been registered!", [
+      showCustomAlert("Success", "Your masjid has been registered!", [
         { text: "OK", onPress: () => router.dismissAll() },
       ]);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Registration failed. Please try again.");
+      showCustomAlert("Error", "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

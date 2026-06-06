@@ -5,10 +5,10 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -16,7 +16,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
 import { getMasjidById, updateMasjidTimetable } from "@/lib/store";
-import { Timetable, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
+import { Timetable, PRAYER_NAMES, PRAYER_ORDER, DEFAULT_TIMETABLE } from "@/lib/types";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
 
@@ -40,8 +40,8 @@ type FormTimetable = Record<keyof Timetable, FormTime>;
 const convert24ToForm = (timetable24: Timetable): FormTimetable => {
   const form: Partial<FormTimetable> = {};
   for (const key of PRAYER_ORDER) {
-    const time24 = timetable24[key];
-    const [h, m] = time24.split(":");
+    const time24 = (timetable24 && timetable24[key]) || DEFAULT_TIMETABLE[key];
+    const [h, m] = time24 && time24.includes(":") ? time24.split(":") : ["12", "00"];
     const hour24 = parseInt(h, 10);
     const ampm = hour24 >= 12 ? "PM" : "AM";
     const hour12 = hour24 % 12 || 12;
@@ -95,7 +95,7 @@ export default function EditTimetableScreen() {
               admin.masjidId &&
               admin.masjidId !== m.id
             ) {
-              Alert.alert("Not Allowed", "You can only update your own masjid timetable.");
+              showCustomAlert("Not Allowed", "You can only update your own masjid timetable.");
               router.back();
               return;
             }
@@ -105,7 +105,7 @@ export default function EditTimetableScreen() {
         } catch (error) {
           console.error("Failed to load timetable:", error);
           if (isMounted) {
-            Alert.alert("Error", "Unable to load timetable.");
+            showCustomAlert("Error", "Unable to load timetable.");
           }
         } finally {
           if (isMounted) setLoading(false);
@@ -151,7 +151,7 @@ export default function EditTimetableScreen() {
   const handleSave = async () => {
     if (!formTimetable || !masjidId) return;
     if (admin?.role === "masjid_admin" && admin.masjidId !== masjidId) {
-      Alert.alert("Not Allowed", "You can only update your own masjid timetable.");
+      showCustomAlert("Not Allowed", "You can only update your own masjid timetable.");
       return;
     }
 
@@ -159,12 +159,12 @@ export default function EditTimetableScreen() {
     for (const prayer of PRAYER_ORDER) {
       const { time } = formTimetable[prayer];
       if (!/^\d{2}:\d{2}$/.test(time)) {
-        Alert.alert("Invalid Time", `Please enter a valid time for ${PRAYER_NAMES[prayer]} (HH:MM format).`);
+        showCustomAlert("Invalid Time", `Please enter a valid time for ${PRAYER_NAMES[prayer]} (HH:MM format).`);
         return;
       }
       const [h, m] = time.split(":").map(Number);
       if (h < 1 || h > 12 || m < 0 || m > 59) {
-        Alert.alert("Invalid Time", `${PRAYER_NAMES[prayer]} has an invalid time value (must be between 01:00 and 12:59).`);
+        showCustomAlert("Invalid Time", `${PRAYER_NAMES[prayer]} has an invalid time value (must be between 01:00 and 12:59).`);
         return;
       }
     }
@@ -174,7 +174,7 @@ export default function EditTimetableScreen() {
       const timetable24 = convertFormTo24(formTimetable);
       const updated = await updateMasjidTimetable(masjidId, timetable24);
       if (!updated) {
-        Alert.alert("Error", "Failed to save timetable. Please try again.");
+        showCustomAlert("Error", "Failed to save timetable. Please try again.");
         return;
       }
 
@@ -182,12 +182,12 @@ export default function EditTimetableScreen() {
       await refreshPrimaryMasjidNotifications();
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Saved", "Prayer times have been updated.", [
+      showCustomAlert("Saved", "Prayer times have been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (error) {
       console.error("Failed to save timetable:", error);
-      Alert.alert("Error", "Something went wrong while saving timetable.");
+      showCustomAlert("Error", "Something went wrong while saving timetable.");
     } finally {
       setSaving(false);
     }
@@ -246,7 +246,7 @@ export default function EditTimetableScreen() {
                   placeholderTextColor={Colors.textMuted}
                   maxLength={5}
                 />
-                
+
                 <View style={styles.ampmContainer}>
                   <Pressable
                     style={[

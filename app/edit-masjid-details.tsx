@@ -5,17 +5,18 @@ import {
   View,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useAuth } from "@/lib/auth-context";
-import { getMasjidById, updateMasjidDetails } from "@/lib/store";
+import { useAuth, updateMasjidAdminCredentials, deleteMasjidAndAuth } from "@/lib/auth-context";
+import { getMasjidById, updateMasjidDetails, getUserProfile, getUserProfileByEmail } from "@/lib/store";
+import * as Clipboard from "expo-clipboard";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
 export default function EditMasjidDetailsScreen() {
@@ -23,11 +24,19 @@ export default function EditMasjidDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
 
+  const canManageCredentials = 
+    admin?.role === "super_admin" || 
+    (admin?.role === "masjid_admin" && admin.masjidId === masjidId);
+
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
+  const [email, setEmail] = useState("");
+  const [origEmail, setOrigEmail] = useState("");
+  const [adminUid, setAdminUid] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,18 +53,45 @@ export default function EditMasjidDetailsScreen() {
               admin.masjidId &&
               admin.masjidId !== m.id
             ) {
-              Alert.alert("Not Allowed", "You can only update your own masjid details.");
+              showCustomAlert("Not Allowed", "You can only update your own masjid details.");
               router.back();
               return;
             }
             setName(m.name);
             setAddress(m.address);
             setCity(m.city);
+            setAdminUid(m.adminUid);
+
+            const canManageCreds =
+              admin?.role === "super_admin" ||
+              (admin?.role === "masjid_admin" && admin.masjidId === m.id);
+
+            if (canManageCreds) {
+              let profile = null;
+              if (m.adminUid) {
+                profile = await getUserProfile(m.adminUid);
+              }
+              
+              if (!profile && m.adminEmail) {
+                profile = await getUserProfileByEmail(m.adminEmail);
+                if (profile && profile.uid && isMounted) {
+                  setAdminUid(profile.uid);
+                }
+              }
+
+              if (profile && isMounted) {
+                setEmail(profile.email || m.adminEmail || "");
+                setOrigEmail(profile.email || m.adminEmail || "");
+              } else if (m.adminEmail && isMounted) {
+                setEmail(m.adminEmail);
+                setOrigEmail(m.adminEmail);
+              }
+            }
           }
         } catch (error) {
           console.error("Failed to load masjid details:", error);
           if (isMounted) {
-            Alert.alert("Error", "Unable to load details.");
+            showCustomAlert("Error", "Unable to load details.");
           }
         } finally {
           if (isMounted) setLoading(false);
@@ -73,20 +109,20 @@ export default function EditMasjidDetailsScreen() {
   const handleSave = async () => {
     if (!masjidId) return;
     if (!name.trim()) {
-      Alert.alert("Required", "Masjid Name is required.");
+      showCustomAlert("Required", "Masjid Name is required.");
       return;
     }
     if (!address.trim()) {
-      Alert.alert("Required", "Address is required.");
+      showCustomAlert("Required", "Address is required.");
       return;
     }
     if (!city.trim()) {
-      Alert.alert("Required", "City is required.");
+      showCustomAlert("Required", "City is required.");
       return;
     }
 
     if (admin?.role === "masjid_admin" && admin.masjidId !== masjidId) {
-      Alert.alert("Not Allowed", "You can only update your own masjid.");
+      showCustomAlert("Not Allowed", "You can only update your own masjid.");
       return;
     }
 
@@ -96,23 +132,79 @@ export default function EditMasjidDetailsScreen() {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
+        adminUid: adminUid || undefined,
       });
 
       if (!updated) {
-        Alert.alert("Error", "Failed to save details. Please try again.");
+        showCustomAlert("Error", "Failed to save details. Please try again.");
         return;
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Saved", "Masjid details have been updated.", [
+      showCustomAlert("Saved", "Masjid details have been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (error) {
       console.error("Failed to save details:", error);
-      Alert.alert("Error", "Something went wrong while saving details.");
+      showCustomAlert("Error", "Something went wrong while saving details.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDelete = async () => {
+    if (!masjidId) return;
+    
+    showCustomAlert(
+      "Delete Masjid",
+      "This will permanently delete the masjid, its prayer timetable, events, feedbacks, and admin account.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            showCustomAlert(
+              "Confirm Deletion",
+              "Are you absolutely sure you want to delete this masjid? This action cannot be undone.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete Permanently",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeleting(true);
+                    try {
+                      let resolvedPassword: string | undefined = undefined;
+                      if (adminUid) {
+                        const profile = await getUserProfile(adminUid);
+                        if (profile && profile.password) {
+                          resolvedPassword = profile.password;
+                        }
+                      }
+                      const res = await deleteMasjidAndAuth(masjidId, adminUid, origEmail, resolvedPassword);
+                      if (res.success) {
+                        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        showCustomAlert("Deleted", "Masjid has been deleted.", [
+                          { text: "OK", onPress: () => router.back() }
+                        ]);
+                      } else {
+                        showCustomAlert("Error", res.error || "Failed to delete masjid.");
+                      }
+                    } catch (err) {
+                      console.error("Failed to delete masjid:", err);
+                      showCustomAlert("Error", "Something went wrong.");
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {
@@ -177,6 +269,31 @@ export default function EditMasjidDetailsScreen() {
           />
         </View>
 
+        {canManageCredentials && (
+          <>
+            <View style={styles.sectionDivider} />
+            
+            <View style={styles.sectionLabelRow}>
+              <Ionicons name="key-outline" size={16} color={Colors.primary} />
+              <Text style={styles.sectionTitleText}>Account Credentials</Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Admin Email ID</Text>
+              <TextInput
+                style={[styles.textInput, styles.readOnlyInput]}
+                value={email}
+                editable={false}
+                placeholder="imam@masjid.com"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+            </View>
+          </>
+        )}
+
         <Pressable
           style={({ pressed }) => [
             styles.saveBtn,
@@ -195,6 +312,27 @@ export default function EditMasjidDetailsScreen() {
             </>
           )}
         </Pressable>
+
+        {admin?.role === "super_admin" && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.deleteBtn,
+              pressed && styles.btnPressed,
+              deleting && styles.btnDisabled,
+            ]}
+            onPress={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={20} color="#fff" />
+                <Text style={styles.deleteBtnText}>Delete Masjid</Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -254,6 +392,63 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  readOnlyInput: {
+    backgroundColor: Colors.borderLight,
+    color: Colors.textMuted,
+  },
+  passwordInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  passwordInput: {
+    flex: 1,
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: Colors.text,
+    padding: 0,
+  },
+  eyeBtn: {
+    paddingLeft: 10,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginVertical: 24,
+  },
+  sectionLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  sectionTitleText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: Colors.primary,
+  },
+  copyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.overlay,
+    borderWidth: 1.2,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  copyBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.primary,
+  },
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -262,9 +457,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
-    marginTop: 10,
+    marginTop: 12,
   },
   saveBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 16,
+    color: "#fff",
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.error,
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginTop: 16,
+  },
+  deleteBtnText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
     color: "#fff",

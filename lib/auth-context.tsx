@@ -8,7 +8,17 @@ import {
   getMasjidByAdminUid,
   getMasjidByAdminEmail,
 } from "./store";
-import { auth, firebaseConfig } from "./firebaseConfig";
+import {
+  doc,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  query,
+  collection,
+  where,
+  getDocs
+} from "firebase/firestore";
+import { auth, db, firebaseConfig } from "./firebaseConfig";
 import { isSuperAdminEmail, SUPER_ADMIN_EMAIL } from "./app-config";
 import {
   onAuthStateChanged,
@@ -16,7 +26,10 @@ import {
   createUserWithEmailAndPassword,
   getAuth as getFirebaseAuth,
   signOut,
-  User
+  User,
+  updateEmail,
+  updatePassword,
+  deleteUser
 } from "firebase/auth";
 
 function getFirebaseErrorMessage(code: string): string {
@@ -151,7 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         uid,
         masjidAdminEmail,
         "masjid_admin",
-        masjid.id
+        masjid.id,
+        password
       );
       return { admin: masjidAdminUser };
     } catch (error: any) {
@@ -188,4 +202,156 @@ export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
+}
+
+export async function updateMasjidAdminCredentials(
+  masjidId: string,
+  adminUid: string,
+  currentEmail: string,
+  currentPassword: string | undefined,
+  newEmail: string,
+  newPassword: string
+): Promise<{ success: boolean; newUid?: string; error?: string }> {
+  const secondaryAppName = `secondary-auth-update-${Date.now()}`;
+  const secondaryApp = initializeFirebaseApp(firebaseConfig, secondaryAppName);
+  const secondaryAuth = getFirebaseAuth(secondaryApp);
+  
+  try {
+    let userToUpdate: any = null;
+    let isNewUser = false;
+    
+    if (currentPassword && currentEmail) {
+      try {
+        const cred = await signInWithEmailAndPassword(secondaryAuth, currentEmail.trim().toLowerCase(), currentPassword);
+        userToUpdate = cred.user;
+      } catch (signInErr) {
+        console.log("Could not sign in with current credentials, will try creating a new auth user:", signInErr);
+      }
+    }
+    
+    if (!userToUpdate) {
+      // Create a new auth user since we can't update the old one
+      try {
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, newEmail.trim().toLowerCase(), newPassword);
+        userToUpdate = cred.user;
+        isNewUser = true;
+      } catch (createErr: any) {
+        const message = getFirebaseErrorMessage(createErr?.code || '');
+        return { success: false, error: `Failed to create new user: ${message}` };
+      }
+    } else {
+      // Update existing user
+      try {
+        if (currentEmail.trim().toLowerCase() !== newEmail.trim().toLowerCase()) {
+          const { updateEmail: firebaseUpdateEmail } = require("firebase/auth");
+          await firebaseUpdateEmail(userToUpdate, newEmail.trim().toLowerCase());
+        }
+        if (currentPassword !== newPassword) {
+          const { updatePassword: firebaseUpdatePassword } = require("firebase/auth");
+          await firebaseUpdatePassword(userToUpdate, newPassword);
+        }
+      } catch (updateErr: any) {
+        const message = getFirebaseErrorMessage(updateErr?.code || '');
+        return { success: false, error: `Failed to update credentials in Auth: ${message}` };
+      }
+    }
+    
+    const finalUid = userToUpdate.uid;
+    
+    // Update Firestore users collection
+    const userRef = doc(db, "users", finalUid);
+    const updatedUserData: AdminUser = {
+      uid: finalUid,
+      email: newEmail.trim().toLowerCase(),
+      role: "masjid_admin",
+      masjidId: masjidId,
+      password: newPassword,
+    };
+    await setDoc(userRef, updatedUserData);
+    
+    // If a new user was created, delete the old Firestore user profile (if different)
+    if (isNewUser && adminUid && adminUid !== finalUid) {
+      try {
+        await deleteDoc(doc(db, "users", adminUid));
+      } catch (delErr) {
+        console.warn("Failed to delete old user profile:", delErr);
+      }
+    }
+    
+    // Update the masjid document
+    const masjidRef = doc(db, "masjids", masjidId);
+    await updateDoc(masjidRef, {
+      adminUid: finalUid,
+      adminEmail: newEmail.trim().toLowerCase()
+    });
+    
+    return { success: true, newUid: finalUid };
+  } catch (err: any) {
+    return { success: false, error: err.message || "An unknown error occurred." };
+  } finally {
+    try {
+      await signOut(secondaryAuth);
+    } catch {}
+    await deleteApp(secondaryApp);
+  }
+}
+
+export async function deleteMasjidAndAuth(
+  masjidId: string,
+  adminUid: string,
+  adminEmail: string | undefined,
+  adminPassword?: string
+): Promise<{ success: boolean; error?: string }> {
+  // Try to delete Firebase Auth user first if we have password
+  if (adminEmail && adminPassword) {
+    const secondaryAppName = `secondary-auth-delete-${Date.now()}`;
+    const secondaryApp = initializeFirebaseApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getFirebaseAuth(secondaryApp);
+    
+    try {
+      const cred = await signInWithEmailAndPassword(secondaryAuth, adminEmail.trim().toLowerCase(), adminPassword);
+      await deleteUser(cred.user);
+      console.log("Successfully deleted Firebase Auth user");
+    } catch (authErr) {
+      console.warn("Could not delete Firebase Auth user (may not exist or bad password):", authErr);
+    } finally {
+      await deleteApp(secondaryApp);
+    }
+  }
+  
+  // Now delete Firestore records
+  try {
+    // 1. Delete Masjid doc
+    await deleteDoc(doc(db, "masjids", masjidId));
+    
+    // 2. Delete Admin User doc
+    if (adminUid) {
+      await deleteDoc(doc(db, "users", adminUid));
+    }
+    
+    // 3. Delete related events
+    const eventsQuery = query(collection(db, "events"), where("masjidId", "==", masjidId));
+    const eventsSnap = await getDocs(eventsQuery);
+    for (const d of eventsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+    
+    // 4. Delete admin notifications
+    const notifsQuery = query(collection(db, "admin_notifications"), where("masjidId", "==", masjidId));
+    const notifsSnap = await getDocs(notifsQuery);
+    for (const d of notifsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+    
+    // 5. Delete masjid feedback messages
+    const msgsQuery = query(collection(db, "masjid_messages"), where("masjidId", "==", masjidId));
+    const msgsSnap = await getDocs(msgsQuery);
+    for (const d of msgsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to delete masjid data." };
+  }
 }

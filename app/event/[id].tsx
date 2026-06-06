@@ -9,7 +9,9 @@ import {
   Platform,
   Share,
   Image,
+  Linking,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -80,11 +82,26 @@ export default function EventDetailScreen() {
 
   const handleGoToMasjid = () => {
     if (masjid) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       router.push({
         pathname: "/masjid/[id]",
         params: { id: masjid.id },
       });
+    }
+  };
+
+  const handleOpenLink = async () => {
+    if (!event?.link) return;
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      let targetUrl = event.link.trim();
+      if (!/^https?:\/\//i.test(targetUrl)) {
+        targetUrl = 'https://' + targetUrl;
+      }
+      await Linking.openURL(targetUrl);
+    } catch (error) {
+      console.error("Failed to open event link:", error);
+      showCustomAlert("Error", "Could not open the website link. Please check if the URL is valid.");
     }
   };
 
@@ -190,6 +207,19 @@ export default function EventDetailScreen() {
               <Text style={styles.metaValue}>{formattedExpiry}</Text>
             </View>
           </View>
+
+          {event.link ? (
+            <Pressable
+              style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
+              onPress={handleOpenLink}
+            >
+              <Ionicons name="globe-outline" size={18} color={Colors.primary} />
+              <Text style={styles.linkButtonText} numberOfLines={1}>
+                {event.link}
+              </Text>
+              <Ionicons name="open-outline" size={16} color={Colors.primary} />
+            </Pressable>
+          ) : null}
         </View>
 
         {!isGlobal && (
@@ -393,6 +423,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
     marginTop: 1,
+  },
+  linkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.overlay,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    gap: 8,
+  },
+  linkButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  linkButtonText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: Colors.primary,
+    flex: 1,
   },
   masjidSection: {
     marginBottom: 24,

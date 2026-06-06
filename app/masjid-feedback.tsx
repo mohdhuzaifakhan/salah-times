@@ -6,10 +6,10 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   StatusBar,
 } from "react-native";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -53,7 +53,7 @@ export default function MasjidFeedbackScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert(
+    showCustomAlert(
       "Delete Message",
       "Are you sure you want to delete this message? This action is permanent.",
       [
@@ -68,7 +68,7 @@ export default function MasjidFeedbackScreen() {
               setMessages((prev) => prev.filter((m) => m.id !== id));
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } else {
-              Alert.alert("Error", "Failed to delete message. Please try again.");
+              showCustomAlert("Error", "Failed to delete message. Please try again.");
             }
           },
         },
