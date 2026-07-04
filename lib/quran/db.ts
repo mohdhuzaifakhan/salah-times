@@ -19,6 +19,7 @@ export interface Bookmark {
   text: string;
   translation: string;
   createdAt: any;
+  pageNumber?: number;
 }
 
 export interface RecentRead {

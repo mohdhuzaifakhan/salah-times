@@ -8,13 +8,14 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
-import { fetchSurahList, Surah } from '@/lib/quran/api';
+import { fetchSurahList, Surah, isQuranSynced, syncFullQuran } from '@/lib/quran/api';
 import { SURA_START_PAGES, PARAH_LIST, ParahMapping } from '@/lib/quran/constants';
 import SurahCard from '@/components/quran/SurahCard';
 import { useQuran } from '@/lib/quran/context';
@@ -53,11 +54,30 @@ export default function QuranHomeScreen() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'surahs' | 'parah'>('surahs');
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   const { recentRead, lastReadPage } = useQuran();
 
   useEffect(() => {
     loadSurahs();
+    checkSyncStatus();
   }, []);
+
+  const checkSyncStatus = async () => {
+    try {
+      const synced = await isQuranSynced();
+      if (!synced) {
+        setSyncing(true);
+        const success = await syncFullQuran('en.sahih', (progress) => {
+          setSyncProgress(progress);
+        });
+        setSyncing(false);
+      }
+    } catch (e) {
+      console.warn("Failed to check or sync Quran offline:", e);
+      setSyncing(false);
+    }
+  };
 
   const loadSurahs = async () => {
     try {
@@ -177,6 +197,15 @@ export default function QuranHomeScreen() {
           <Ionicons name="search" size={20} color={Colors.textMuted} />
         </View>
       </View>
+
+      {syncing && (
+        <View style={styles.syncBanner}>
+          <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
+          <Text style={styles.syncText}>
+            Downloading Quran for offline reading... {Math.round(syncProgress * 100)}%
+          </Text>
+        </View>
+      )}
 
       {lastReadPage && (
         <TouchableOpacity
@@ -427,5 +456,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 22,
     color: Colors.accentLight,
+  },
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.overlay,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  syncText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
+    color: Colors.primary,
   },
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   SafeAreaView,
   StatusBar,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,10 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useQuran } from '@/lib/quran/context';
 import { removeBookmark } from '@/lib/quran/db';
+import axios from 'axios';
+import { SURA_START_PAGES } from '@/lib/quran/constants';
 
 export default function BookmarksScreen() {
   const insets = useSafeAreaInsets();
   const { bookmarks, refreshBookmarks } = useQuran();
+  const [loadingBookmarkId, setLoadingBookmarkId] = useState<string | null>(null);
 
   const handleRemove = async (surahNumber: number, ayahNumber: number) => {
     await removeBookmark(surahNumber, ayahNumber);
@@ -53,11 +57,38 @@ export default function BookmarksScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={styles.bookmarkCard}
-              onPress={() => router.push(`/quran/${item.surahNumber}`)}
+              disabled={loadingBookmarkId !== null}
+              onPress={async () => {
+                if (item.pageNumber) {
+                  router.push(`/quran/mushaf?page=${item.pageNumber}`);
+                  return;
+                }
+                try {
+                  setLoadingBookmarkId(item.id);
+                  const response = await axios.get(`https://api.quran.com/api/v4/verses/by_key/${item.surahNumber}:${item.ayahNumber}`);
+                  const pageNumber = response.data.verse?.page_number;
+                  if (pageNumber) {
+                    router.push(`/quran/mushaf?page=${pageNumber}`);
+                  } else {
+                    const fallbackMapping = SURA_START_PAGES.find(s => s.number === item.surahNumber);
+                    router.push(`/quran/mushaf?page=${fallbackMapping ? fallbackMapping.startPage : 1}`);
+                  }
+                } catch (e) {
+                  const fallbackMapping = SURA_START_PAGES.find(s => s.number === item.surahNumber);
+                  router.push(`/quran/mushaf?page=${fallbackMapping ? fallbackMapping.startPage : 1}`);
+                } finally {
+                  setLoadingBookmarkId(null);
+                }
+              }}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.surahName}>{item.surahName} • Ayat {item.ayahNumber}</Text>
-                <TouchableOpacity onPress={() => handleRemove(item.surahNumber, item.ayahNumber)}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.surahName}>{item.surahName} • Ayat {item.ayahNumber}</Text>
+                  {loadingBookmarkId === item.id && (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => handleRemove(item.surahNumber, item.ayahNumber)} disabled={loadingBookmarkId !== null}>
                   <Ionicons name="trash-outline" size={20} color={Colors.error} />
                 </TouchableOpacity>
               </View>

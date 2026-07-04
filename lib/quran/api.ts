@@ -1,5 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SURA_START_PAGES } from './constants';
 
 const BASE_URL = 'https://api.alquran.cloud/v1';
 
@@ -69,7 +70,7 @@ export const fetchSurahDetail = async (surahNumber: number, edition: string = 'e
 
     // Fetch Arabic and translation in parallel
     const [arabicRes, translationRes] = await Promise.all([
-      axios.get(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`),
+      axios.get(`${BASE_URL}/surah/${surahNumber}/quran-indopak`),
       axios.get(`${BASE_URL}/surah/${surahNumber}/${edition}`)
     ]);
 
@@ -114,6 +115,8 @@ export interface MushafAyah {
   numberInSurah: number;
   juz: number;
   page: number;
+  ruku?: number;
+  surahRuku?: number;
   translation?: string;
   surah: {
     number: number;
@@ -131,59 +134,115 @@ export interface MushafPage {
   surahs: { [key: number]: any };
 }
 
-const CACHE_KEY_MUSHAF_PAGE = 'quran_mushaf_page_';
+const CACHE_KEY_MUSHAF_PAGE = 'quran_mushaf_page_v3_';
 const CACHE_KEY_TAFSEER = 'quran_tafseer_';
+
+const getSurahFromList = (surahNumber: number, surahList: Surah[]): any => {
+  const surah = surahList?.find(s => s.number === surahNumber);
+  if (surah) return surah;
+
+  const staticSurah = SURA_START_PAGES.find(s => s.number === surahNumber);
+  return {
+    number: surahNumber,
+    name: staticSurah?.name || '',
+    englishName: staticSurah?.englishName || '',
+    englishNameTranslation: '',
+    numberOfAyahs: 7, // fallback
+    revelationType: 'Meccan'
+  };
+};
+
+const enrichMushafPage = (page: any, surahList: Surah[], startRukus: { [key: number]: number }): MushafPage => {
+  const mappedAyahs = page.ayahs.map((ayah: any) => {
+    if (ayah.surah && ayah.surah.name) return ayah; // backwards compatibility
+    const surahNum = ayah.surahNumber || ayah.surah?.number;
+    const startRuku = startRukus[surahNum] || 1;
+    return {
+      ...ayah,
+      surahRuku: ayah.surahRuku || (ayah.ruku ? (ayah.ruku - startRuku + 1) : undefined),
+      surah: getSurahFromList(surahNum, surahList)
+    };
+  });
+
+  const pageSurahs: { [key: number]: any } = {};
+  mappedAyahs.forEach((ayah: any) => {
+    if (ayah.surah && ayah.surah.number) {
+      pageSurahs[ayah.surah.number] = ayah.surah;
+    }
+  });
+
+  return {
+    pageNumber: page.pageNumber,
+    ayahs: mappedAyahs,
+    surahs: pageSurahs
+  };
+};
 
 // Fetch Quran page dynamically and cache it
 export const fetchQuranPage = async (pageNumber: number, translationEdition: string = 'en.sahih'): Promise<MushafPage> => {
   const cacheKey = `${CACHE_KEY_MUSHAF_PAGE}${pageNumber}_${translationEdition}`;
   try {
     const cached = await AsyncStorage.getItem(cacheKey);
+    // Load surahs list and start rukus to enrich details
+    const [surahListStr, startRukusStr] = await Promise.all([
+      AsyncStorage.getItem(CACHE_KEY_SURAH_LIST),
+      AsyncStorage.getItem('quran_surah_start_rukus')
+    ]);
+    const surahList: Surah[] = surahListStr ? JSON.parse(surahListStr) : [];
+    const startRukus: { [key: number]: number } = startRukusStr ? JSON.parse(startRukusStr) : {};
+
     if (cached) {
-      return JSON.parse(cached);
+      const page = JSON.parse(cached);
+      return enrichMushafPage(page, surahList, startRukus);
     }
 
-    // Fetch Uthmani Arabic text and translation in parallel
+    // Fetch Indo-Pak Arabic text and translation in parallel
     const [arabicRes, translationRes] = await Promise.all([
-      axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/quran-uthmani`),
+      axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/quran-indopak`),
       axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/${translationEdition}`)
     ]);
 
     const arabicAyahs = arabicRes.data.data.ayahs;
     const translationAyahs = translationRes.data.data.ayahs;
-    const surahs = arabicRes.data.data.surahs;
 
-    // Merge Arabic & translation by index
-    const mergedAyahs: MushafAyah[] = arabicAyahs.map((ayah: any, index: number) => ({
+    // Merge Arabic & translation by index (saving ONLY surahNumber to save space)
+    const mergedAyahs = arabicAyahs.map((ayah: any, index: number) => ({
       number: ayah.number,
       text: ayah.text,
       numberInSurah: ayah.numberInSurah,
       juz: ayah.juz,
       page: ayah.page,
+      ruku: ayah.ruku,
       translation: translationAyahs[index]?.text || '',
-      surah: {
-        number: ayah.surah.number,
-        name: ayah.surah.name,
-        englishName: ayah.surah.englishName,
-        englishNameTranslation: ayah.surah.englishNameTranslation,
-        numberOfAyahs: ayah.surah.numberOfAyahs,
-        revelationType: ayah.surah.revelationType,
-      }
+      surahNumber: ayah.surah.number,
     }));
 
-    const result: MushafPage = {
+    const resultToSave = {
       pageNumber,
-      ayahs: mergedAyahs,
-      surahs
+      ayahs: mergedAyahs
     };
 
-    // Save to cache
-    await AsyncStorage.setItem(cacheKey, JSON.stringify(result));
-    return result;
+    // Save optimized page to cache
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(resultToSave));
+
+    // Enrich before returning
+    return enrichMushafPage(resultToSave, surahList, startRukus);
   } catch (error) {
     console.error(`Error fetching Quran page ${pageNumber}:`, error);
     const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      try {
+        const [surahListStr, startRukusStr] = await Promise.all([
+          AsyncStorage.getItem(CACHE_KEY_SURAH_LIST),
+          AsyncStorage.getItem('quran_surah_start_rukus')
+        ]);
+        const surahList: Surah[] = surahListStr ? JSON.parse(surahListStr) : [];
+        const startRukus = startRukusStr ? JSON.parse(startRukusStr) : {};
+        return enrichMushafPage(JSON.parse(cached), surahList, startRukus);
+      } catch {
+        return JSON.parse(cached);
+      }
+    }
     return {
       pageNumber,
       ayahs: [],
@@ -259,6 +318,111 @@ export const fetchTafseerFromAPI = async (
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached) return JSON.parse(cached);
     return `Failed to fetch Tafseer. Please check your internet connection.`;
+  }
+};
+
+const OFFLINE_SYNC_KEY = 'quran_offline_synced_v3_';
+
+export const isQuranSynced = async (translationEdition: string = 'en.sahih'): Promise<boolean> => {
+  try {
+    const status = await AsyncStorage.getItem(`${OFFLINE_SYNC_KEY}${translationEdition}`);
+    return status === 'true';
+  } catch {
+    return false;
+  }
+};
+
+export const syncFullQuran = async (
+  translationEdition: string = 'en.sahih',
+  onProgress?: (progress: number) => void
+): Promise<boolean> => {
+  try {
+    onProgress?.(0.05);
+
+    // Pre-fetch and cache the surah list first
+    let surahList: Surah[] = [];
+    try {
+      surahList = await fetchSurahList();
+    } catch (e) {
+      console.warn("Failed to fetch surah list during sync:", e);
+    }
+
+    onProgress?.(0.1);
+
+    // Fetch Arabic (Indo-Pak) and translation in parallel
+    const [arabicRes, translationRes] = await Promise.all([
+      axios.get(`https://api.alquran.cloud/v1/quran/quran-indopak`),
+      axios.get(`https://api.alquran.cloud/v1/quran/${translationEdition}`)
+    ]);
+
+    onProgress?.(0.45);
+
+    const arabicSurahs = arabicRes.data.data.surahs;
+    const translationSurahs = translationRes.data.data.surahs;
+
+    // Track starting ruku index of each surah
+    const surahStartRukus: { [key: number]: number } = {};
+    arabicSurahs.forEach((surah: any) => {
+      if (surah.ayahs && surah.ayahs.length > 0) {
+        surahStartRukus[surah.number] = surah.ayahs[0].ruku;
+      }
+    });
+    await AsyncStorage.setItem('quran_surah_start_rukus', JSON.stringify(surahStartRukus));
+
+    // Group ayahs by page number (1 to 604) without redundant metadata objects
+    const pagesMap: { [page: number]: { pageNumber: number; ayahs: any[] } } = {};
+    for (let p = 1; p <= 604; p++) {
+      pagesMap[p] = { pageNumber: p, ayahs: [] };
+    }
+
+    onProgress?.(0.65);
+
+    arabicSurahs.forEach((surah: any, surahIdx: number) => {
+      const transSurah = translationSurahs[surahIdx];
+      const startRuku = surahStartRukus[surah.number] || 1;
+
+      surah.ayahs.forEach((ayah: any, ayahIdx: number) => {
+        const transAyah = transSurah.ayahs[ayahIdx];
+        const pageNum = ayah.page;
+
+        if (pageNum >= 1 && pageNum <= 604) {
+          const merged = {
+            number: ayah.number,
+            text: ayah.text,
+            numberInSurah: ayah.numberInSurah,
+            juz: ayah.juz,
+            page: ayah.page,
+            ruku: ayah.ruku,
+            surahRuku: ayah.ruku - startRuku + 1,
+            translation: transAyah?.text || '',
+            surahNumber: surah.number
+          };
+
+          pagesMap[pageNum].ayahs.push(merged);
+        }
+      });
+    });
+
+    onProgress?.(0.8);
+
+    // Save pages in chunks to AsyncStorage
+    const chunk_size = 50;
+    for (let i = 1; i <= 604; i += chunk_size) {
+      const chunk: [string, string][] = [];
+      for (let j = i; j < i + chunk_size && j <= 604; j++) {
+        chunk.push([`${CACHE_KEY_MUSHAF_PAGE}${j}_${translationEdition}`, JSON.stringify(pagesMap[j])]);
+      }
+      await AsyncStorage.multiSet(chunk);
+    }
+
+    // Save sync status
+    await AsyncStorage.setItem(`${OFFLINE_SYNC_KEY}${translationEdition}`, 'true');
+
+    onProgress?.(1.0);
+    return true;
+  } catch (error) {
+    console.error('Error syncing full Quran:', error);
+    return false;
   }
 };
 

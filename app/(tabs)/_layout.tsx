@@ -28,7 +28,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="admin">
         <Icon sf={{ default: "person.badge.key", selected: "person.badge.key.fill" }} />
-        <Label>My Masjid</Label>
+        <Label>Admin</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />

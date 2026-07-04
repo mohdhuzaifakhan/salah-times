@@ -57,6 +57,11 @@ const getCurrentParah = (page: number) => {
   return activeParah;
 };
 
+const toArabicDigits = (num: number) => {
+  const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  return num.toString().split('').map(digit => arabicDigits[parseInt(digit)]).join('');
+};
+
 // Memoized Page Item component
 const MushafPageItem = React.memo(({
   pageNumber,
@@ -75,6 +80,7 @@ const MushafPageItem = React.memo(({
 }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [pageData, setPageData] = useState<MushafPage | null>(null);
+  const [nextPageData, setNextPageData] = useState<MushafPage | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -99,11 +105,27 @@ const MushafPageItem = React.memo(({
     };
   }, [pageNumber, translationLanguage]);
 
+  useEffect(() => {
+    let isMounted = true;
+    if (pageNumber < 604) {
+      fetchQuranPage(pageNumber + 1, translationLanguage)
+        .then(data => {
+          if (isMounted) {
+            setNextPageData(data);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [pageNumber, translationLanguage]);
+
   if (loading) {
     return (
       <View style={styles.pageItemContainer}>
         <View style={styles.mushafPaper}>
-          <View style={styles.decorativeFrame}>
+          <View style={styles.singleBorderFrame}>
             <View style={styles.loaderContainer}>
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={styles.loaderText}>Loading page {pageNumber}...</Text>
@@ -119,7 +141,7 @@ const MushafPageItem = React.memo(({
     return (
       <View style={styles.pageItemContainer}>
         <View style={styles.mushafPaper}>
-          <View style={styles.decorativeFrame}>
+          <View style={styles.singleBorderFrame}>
             <View style={styles.loaderContainer}>
               {isError ? (
                 <Ionicons name="cloud-offline-outline" size={48} color={Colors.textMuted} style={{ marginBottom: 12 }} />
@@ -143,46 +165,80 @@ const MushafPageItem = React.memo(({
   return (
     <View style={styles.pageItemContainer}>
       <Pressable onPress={onPagePress} style={styles.mushafPaper}>
-        <View style={styles.decorativeFrame}>
-          <View style={styles.innerFrame}>
-            <ScrollView 
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
-            >
-              <View style={styles.quranContent}>
-                {uniqueSurahNumbers.map((surahNumber) => {
-                  const surahAyahs = pageData.ayahs.filter(a => a.surah.number === surahNumber);
-                  const firstAyah = surahAyahs[0];
-                  const renderHeader = firstAyah.numberInSurah === 1;
+        <View style={styles.singleBorderFrame}>
+          {/* Calligraphic Page Header inside paper border */}
+          <View style={styles.innerPageHeader}>
+            <Text style={styles.innerPageHeaderArabicText} numberOfLines={1}>
+              {uniqueSurahNumbers.length > 0 
+                ? pageData.ayahs.find(a => a.surah.number === uniqueSurahNumbers[0])?.surah.name 
+                : ''}
+            </Text>
+            <Text style={styles.innerPageHeaderNumberText}>
+              {toArabicDigits(pageNumber)}
+            </Text>
+            <Text style={styles.innerPageHeaderArabicText} numberOfLines={1}>
+              {getCurrentParah(pageNumber).arabicName}
+            </Text>
+          </View>
+          <View style={styles.innerPageHeaderDivider} />
 
-                  return (
-                    <View key={`surah_group_${surahNumber}`} style={styles.surahGroup}>
-                      {renderHeader && (
-                        <View style={styles.surahBannerContainer}>
-                          <View style={styles.surahBannerCard}>
-                            <View style={styles.bannerOrnamentLeft} />
-                            <View style={styles.bannerCenterContent}>
-                              <Text style={styles.bannerArabicTitle}>{firstAyah.surah.name}</Text>
-                            </View>
-                            <View style={styles.bannerOrnamentRight} />
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.quranContent}>
+              {uniqueSurahNumbers.map((surahNumber) => {
+                const surahAyahs = pageData.ayahs.filter(a => a.surah.number === surahNumber);
+                const firstAyah = surahAyahs[0];
+                const renderHeader = firstAyah.numberInSurah === 1;
+
+                return (
+                  <View key={`surah_group_${surahNumber}`} style={styles.surahGroup}>
+                    {renderHeader && (
+                      <View style={styles.surahBannerContainer}>
+                        <View style={styles.surahBannerCard}>
+                          <View style={styles.bannerOrnamentLeft} />
+                          <View style={styles.bannerCenterContent}>
+                            <Text style={styles.bannerArabicTitle}>{firstAyah.surah.name}</Text>
                           </View>
-                          {/* Centered Bismillah Header (Not for Surah 1 or 9) */}
-                          {firstAyah.surah.number !== 1 && firstAyah.surah.number !== 9 && (
-                            <Text style={styles.bismillahText}>بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</Text>
-                          )}
+                          <View style={styles.bannerOrnamentRight} />
                         </View>
-                      )}
-                      <Text style={styles.arabicParagraph}>
-                        {surahAyahs.map((item) => {
+                        {/* Centered Bismillah Header (Not for Surah 1 or 9) */}
+                        {firstAyah.surah.number !== 1 && firstAyah.surah.number !== 9 && (
+                          <Text style={styles.bismillahText}>بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</Text>
+                        )}
+                      </View>
+                    )}
+                    <View style={styles.surahTextContainer}>
+                      <Text style={styles.quranTextParagraph}>
+                        {surahAyahs.map((item, index) => {
                           const isHighlightedText = selectedAyah?.number === item.number;
-                          // Optimize display font size to fit more nicely
-                          const displayFontSize = Math.min(22, (fontSize * 0.85) + 2);
+                          const displayFontSize = Math.min(26, (fontSize * 0.95) + 4);
                           const displayLineHeight = displayFontSize * 1.95;
+
+                          // Determine if a Ruku ends on this ayah
+                          const isLastAyahOfSurah = item.numberInSurah === item.surah.numberOfAyahs;
+                          const isRukuFinished = (() => {
+                            if (item.ruku === undefined) return false;
+                            const nextAyahOnPage = surahAyahs[index + 1];
+                            if (nextAyahOnPage) {
+                              return nextAyahOnPage.ruku !== item.ruku;
+                            }
+                            if (isLastAyahOfSurah) {
+                              return true;
+                            }
+                            // If it's the last ayah of the page, check the first ayah of the next page
+                            if (nextPageData && nextPageData.ayahs && nextPageData.ayahs.length > 0) {
+                              const firstAyahNextPage = nextPageData.ayahs[0];
+                              return firstAyahNextPage.ruku !== item.ruku;
+                            }
+                            return false;
+                          })();
 
                           // Strip Bismillah prefix if not Surah 1 or 9 and it is the first ayah
                           let textToRender = item.text;
                           if (item.numberInSurah === 1 && item.surah.number !== 1 && item.surah.number !== 9) {
-                            const BISMILLAH_REGEX = /^بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ\s*/;
+                            const BISMILLAH_REGEX = /^(بِسْمِ\s+اللَّهِ\s+الرَّحْمَٰنِ\s+الرَّحِيمِ|بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ)\s*/;
                             textToRender = textToRender.replace(BISMILLAH_REGEX, "");
                           }
 
@@ -191,23 +247,28 @@ const MushafPageItem = React.memo(({
                               key={item.number}
                               onPress={() => onAyahTap(item)}
                               style={[
-                                styles.ayahTextSegment,
+                                styles.ayahInlineText,
                                 { fontSize: displayFontSize, lineHeight: displayLineHeight },
-                                isHighlightedText && styles.highlightedAyahText
+                                isHighlightedText && styles.highlightedInlineAyahText
                               ]}
                             >
                               {textToRender}
-                              <Text style={styles.ayahBadge}> ﴿{item.numberInSurah}﴾ </Text>
+                              <Text style={styles.ayahBadge}> ﴿{toArabicDigits(item.numberInSurah)}﴾ </Text>
+                              {isRukuFinished && (
+                                <Text style={styles.rukuInlineSign}>
+                                  {item.surahRuku !== undefined ? ` ﴿ع/${toArabicDigits(item.surahRuku)}﴾ ` : " ﴿ع﴾ "}
+                                </Text>
+                              )}
                             </Text>
                           );
                         })}
                       </Text>
                     </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
         </View>
       </Pressable>
     </View>
@@ -237,6 +298,27 @@ export default function MushafScreen() {
     // Auto-update reading progress in background
     updateLastReadPage(currentPage);
   }, [currentPage]);
+
+  // Background pre-fetching adjacent pages to improve swipe performance
+  useEffect(() => {
+    const prefetchAdjacent = async () => {
+      const pagesToPrefetch = [
+        currentPage - 1,
+        currentPage + 1,
+        currentPage - 2,
+        currentPage + 2
+      ];
+      for (const p of pagesToPrefetch) {
+        if (p >= 1 && p <= 604) {
+          fetchQuranPage(p, preferences.translationLanguage).catch((err) => {
+            console.log(`Background prefetch failed for page ${p}:`, err);
+          });
+        }
+      }
+    };
+    const timer = setTimeout(prefetchAdjacent, 800);
+    return () => clearTimeout(timer);
+  }, [currentPage, preferences.translationLanguage]);
 
   // Scroll to initial page index on load
   useEffect(() => {
@@ -298,7 +380,8 @@ export default function MushafScreen() {
         ayahNumber: selectedAyah.numberInSurah,
         surahName: selectedAyah.surah.englishName,
         text: selectedAyah.text,
-        translation: selectedAyah.translation || ''
+        translation: selectedAyah.translation || '',
+        pageNumber: selectedAyah.page
       });
     }
     refreshBookmarks();
@@ -575,20 +658,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFBF6', // Elegant warm off-white paper
     overflow: 'hidden',
   },
-  decorativeFrame: {
+  singleBorderFrame: {
     flex: 1,
-    padding: 6,
-    borderWidth: 2,
-    borderColor: '#EADBB6', // Soft gold outer border
-    margin: 6,
+    borderWidth: 1.5,
+    borderColor: '#D4A843', // One single elegant gold border
+    margin: 8,
+    padding: 8,
     borderRadius: 12,
-  },
-  innerFrame: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#D4A843', // Ornate gold inner border
-    padding: 6,
-    borderRadius: 8,
   },
   scrollContent: {
     flexGrow: 1,
@@ -667,14 +743,33 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 8,
   },
-  highlightedAyahText: {
-    backgroundColor: 'rgba(212, 168, 67, 0.22)', // Elegant soft golden overlay highlight
-    borderRadius: 6,
+  surahTextContainer: {
+    width: '100%',
+    paddingHorizontal: 2,
+    paddingVertical: 10,
+    backgroundColor: '#FAFBF6',
+  },
+  quranTextParagraph: {
+    textAlign: 'justify',
+    writingDirection: 'rtl',
+  },
+  ayahInlineText: {
+    fontFamily: 'Lateef_400Regular',
+    color: '#1A2E1A',
+  },
+  highlightedInlineAyahText: {
+    backgroundColor: 'rgba(212, 168, 67, 0.22)',
   },
   ayahBadge: {
     color: '#B08E35',
-    fontSize: 16,
-    fontFamily: 'Amiri_700Bold',
+    fontSize: 18,
+    fontFamily: 'Lateef_400Regular',
+  },
+  rukuInlineSign: {
+    color: '#D4A843',
+    fontSize: 18,
+    fontFamily: 'Lateef_400Regular',
+    fontWeight: 'bold',
   },
   bottomBar: {
     flexDirection: 'row',
@@ -798,5 +893,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     color: Colors.primary,
+  },
+  innerPageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+    paddingHorizontal: 8,
+    width: '100%',
+  },
+  innerPageHeaderArabicText: {
+    fontFamily: 'Lateef_400Regular',
+    fontSize: 22,
+    color: Colors.primary,
+  },
+  innerPageHeaderNumberText: {
+    fontFamily: 'Lateef_400Regular',
+    fontSize: 20,
+    color: '#D4A843',
+    fontWeight: 'bold',
+  },
+  innerPageHeaderDivider: {
+    height: 1.5,
+    backgroundColor: '#D4A843',
+    width: '100%',
+    marginBottom: 8,
   },
 });

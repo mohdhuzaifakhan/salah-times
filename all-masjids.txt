@@ -1,0 +1,23 @@
+index, masjid name , email , password
+1, jama masjid , jama.masjid.tauseef.3@gmail.com , Jamamasjid3@123
+2, isha masjid , masjid.isha.zubair.4@gmail.com, Masjidisha@1234
+3, Abu Hanifa masjid , Talhatandvi.5@gmail.com, Talha@786
+4, Hamza maasjid, hamza.masjid.9@gmail.com, HamzaMasjid9@123
+5, Mustafa Masjid , mustafa.masjid11@gmail.com, Mustafa11@786
+6, Karim Masjid , karimmasjid.10@gmail.com , Karimmasjid@4345
+7, Zakariya Masjid , Zakariyamasjid.15@gmail.com, Zakariya@7078
+8, Madina Masjid , Madinamasjid.13@gmail.com, Madinamasjid@7078
+9, Shahi masjid , Shahimasjid.12@gmail.com, Shahimasjid321
+10, Lal Masjid , lalmasjid.16@gmail.com, Lalmasjid@123
+11, Mahal Waali masjid , mahalwalimasjid.17@gmail.com, Mahalwalimasjid@321
+12, Thekedaar waali masjid , thekedarwalimasjid.07@gmail.com, Thekedar@7078
+13, Fatima Masjid , fatimamasjid.19@gmail.com, Fatima@321,
+14, Moti Masjid , moti.masjid.20@gmail.com , Motimasjid20@123
+15, Teliyo waali masjid , teliyomasjid21@gmail.com, Teliyomasjid@123
+16, Muawiya masjid , muawiyamasjid21@gmail.com, Muawiyamasjid@788
+17, Ayesha masjid , ayeshamasjid.8@gmail.com , Ayesha@321
+18, Manharan masjid , mohd.iqrar.1@gmail.com, Mohdiqrar1@123
+19, Sarai wali masjid , zubairalam.6@gmail.com, 
+20, Thane waali masjid , thana.masjid.2@gmail.com, 
+21, Abubakar masjid , abubakarmasjid.14@gmail.com, 
+

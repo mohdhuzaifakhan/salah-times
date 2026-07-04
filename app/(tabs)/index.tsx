@@ -9,14 +9,18 @@ import {
   RefreshControl,
   Platform,
   Pressable,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
+import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { Masjid, AppEvent } from "@/lib/types";
-import { getAllMasjids, getGlobalEvents, getPrimaryMasjidId, getMasjidById } from "@/lib/store";
+import { getAllMasjids, getGlobalEvents, getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from "@/lib/store";
+import { schedulePrimaryMasjidNotifications, clearScheduledNotifications } from "@/lib/notifications";
 import { MasjidCard } from "@/components/MasjidCard";
 import { EventCard } from "@/components/EventCard";
 import { ExploreSkeleton } from "@/components/Skeleton";
@@ -42,6 +46,8 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [primaryMasjid, setPrimaryMasjid] = useState<Masjid | null>(null);
   const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
+  const [showMasjidModal, setShowMasjidModal] = useState(false);
+  const [masjidSearch, setMasjidSearch] = useState("");
 
   const loadData = useCallback(async () => {
     try {
@@ -66,6 +72,39 @@ export default function ExploreScreen() {
       setLoading(false);
     }
   }, []);
+
+  const handleSelectPrimaryMasjid = async (masjidId: string | null) => {
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (masjidId) {
+        await savePrimaryMasjidId(masjidId);
+        setPrimaryMasjidId(masjidId);
+        const selected = masjids.find((m) => m.id === masjidId) || (await getMasjidById(masjidId));
+        setPrimaryMasjid(selected);
+        if (selected) {
+          await schedulePrimaryMasjidNotifications(selected);
+        }
+      } else {
+        await savePrimaryMasjidId(null);
+        setPrimaryMasjidId(null);
+        setPrimaryMasjid(null);
+        await clearScheduledNotifications();
+      }
+      setShowMasjidModal(false);
+      setMasjidSearch("");
+    } catch (e) {
+      console.error("Failed to set primary masjid:", e);
+      showCustomAlert("Error", "Failed to select primary masjid. Please try again.");
+    }
+  };
+
+  const filteredForDropdown = useMemo(() => {
+    return masjids.filter(
+      (m) =>
+        m.name.toLowerCase().includes(masjidSearch.toLowerCase()) ||
+        m.city.toLowerCase().includes(masjidSearch.toLowerCase())
+    );
+  }, [masjids, masjidSearch]);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,7 +141,22 @@ export default function ExploreScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
       <View style={styles.headerSection}>
-        <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
+        <View style={styles.greetingRow}>
+          <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
+          <Pressable
+            style={styles.headerDropdownSelectBox}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowMasjidModal(true);
+            }}
+          >
+            <Ionicons name="star" size={13} color={primaryMasjid ? Colors.accent : Colors.textMuted} />
+            <Text style={styles.headerDropdownSelectText} numberOfLines={1}>
+              {primaryMasjid ? primaryMasjid.name : "Select Primary Masjid"}
+            </Text>
+            <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
+          </Pressable>
+        </View>
         <Text style={styles.title}>{t('find_prayer_times')}</Text>
       </View>
       <View style={styles.searchContainer}>
@@ -125,6 +179,86 @@ export default function ExploreScreen() {
           />
         )}
       </View>
+
+      {/* Dropdown Masjid Selector Modal */}
+      <Modal visible={showMasjidModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Primary Masjid</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMasjidModal(false);
+                  setMasjidSearch("");
+                }}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSearchBox}>
+              <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search Masjid..."
+                value={masjidSearch}
+                onChangeText={setMasjidSearch}
+                placeholderTextColor={Colors.textMuted}
+              />
+              {masjidSearch !== "" && (
+                <TouchableOpacity onPress={() => setMasjidSearch("")}>
+                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <FlatList
+              data={filteredForDropdown}
+              keyExtractor={(item) => item.id}
+              ListHeaderComponent={
+                primaryMasjidId ? (
+                  <TouchableOpacity
+                    style={styles.modalClearItem}
+                    onPress={() => handleSelectPrimaryMasjid(null)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={Colors.error} style={{ marginRight: 12 }} />
+                    <Text style={styles.modalClearText}>Remove Primary Masjid</Text>
+                  </TouchableOpacity>
+                ) : null
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalMasjidItem}
+                  onPress={() => handleSelectPrimaryMasjid(item.id)}
+                >
+                  <View style={styles.modalMasjidIcon}>
+                    <Ionicons
+                      name="moon-outline"
+                      size={18}
+                      color={item.id === primaryMasjidId ? Colors.accent : Colors.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalMasjidName}>{item.name}</Text>
+                    <Text style={styles.modalMasjidCity}>{item.city}</Text>
+                  </View>
+                  {item.id === primaryMasjidId && (
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
+                  )}
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={{ paddingBottom: 30 }}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.modalEmptyState}>
+                  <Text style={styles.modalEmptyText}>No masjids found matching your search.</Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
       {loading ? (
         <ExploreSkeleton />
       ) : (
@@ -377,5 +511,126 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
     color: Colors.primary,
+  },
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 2,
+  },
+  headerDropdownSelectBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderColor: Colors.borderLight,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 4,
+    maxWidth: 180,
+  },
+  headerDropdownSelectText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
+    color: Colors.text,
+    flexShrink: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: "75%",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: Colors.primary,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalSearchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F2EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: Colors.text,
+    marginLeft: 4,
+  },
+  modalClearItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  modalClearText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.error,
+  },
+  modalMasjidItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+    gap: 12,
+  },
+  modalMasjidIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: Colors.overlay,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalMasjidName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.text,
+  },
+  modalMasjidCity: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  modalEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  modalEmptyText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: Colors.textMuted,
+    textAlign: "center",
   },
 });

@@ -10,8 +10,9 @@ import {
   useColorScheme,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -23,16 +24,18 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   const isDark = colorScheme === "dark";
   const insets = useSafeAreaInsets();
 
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
   const theme = {
-    background: isDark ? "#000000" : "#FFFFFF",
-    backgroundSecondary: isDark ? "#1C1C1E" : "#F2F2F7",
-    text: isDark ? "#FFFFFF" : "#000000",
-    textSecondary: isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.7)",
-    link: "#007AFF",
+    background: isDark ? "#121212" : "#FAFBF6",
+    cardBackground: isDark ? "#1E1E1E" : "#FFFFFF",
+    text: isDark ? "#FFFFFF" : "#1A2E1A",
+    textSecondary: isDark ? "rgba(255, 255, 255, 0.7)" : "#5A6E5A",
+    primary: "#1E4620",
+    accent: "#D4A843",
     buttonText: "#FFFFFF",
   };
-
-  const [isModalVisible, setIsModalVisible] = useState(false);
 
   const handleRestart = async () => {
     try {
@@ -40,6 +43,19 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     } catch (restartError) {
       console.error("Failed to restart app:", restartError);
       resetError();
+    }
+  };
+
+  const handleResetData = async () => {
+    try {
+      setResetting(true);
+      await AsyncStorage.clear();
+      await reloadAppAsync();
+    } catch (clearError) {
+      console.error("Failed to clear data:", clearError);
+      resetError();
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -58,123 +74,100 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   });
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {__DEV__ ? (
+    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+      {__DEV__ && (
         <Pressable
           onPress={() => setIsModalVisible(true)}
           accessibilityLabel="View error details"
           accessibilityRole="button"
-          style={({ pressed }) => [
+          style={[
             styles.topButton,
             {
-              top: insets.top + 16,
-              backgroundColor: theme.backgroundSecondary,
-              opacity: pressed ? 0.8 : 1,
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.accent,
+              borderWidth: 1,
             },
           ]}
         >
-          <Feather name="alert-circle" size={20} color={theme.text} />
+          <Feather name="code" size={20} color={theme.accent} />
         </Pressable>
-      ) : null}
+      )}
 
-      <View style={styles.content}>
+      <View style={[styles.contentCard, { backgroundColor: theme.cardBackground }]}>
+        <View style={[styles.iconContainer, { backgroundColor: 'rgba(30, 70, 32, 0.08)' }]}>
+          <Ionicons name="alert-circle" size={48} color={theme.primary} />
+        </View>
+
         <Text style={[styles.title, { color: theme.text }]}>
+          Oops! Kuch galat ho gaya
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
           Something went wrong
         </Text>
 
         <Text style={[styles.message, { color: theme.textSecondary }]}>
-          Please reload the app to continue.
+          {error.message || "An unexpected error has occurred. Please restart the app or reset cached data to recover."}
         </Text>
 
-        <Pressable
-          onPress={handleRestart}
-          style={({ pressed }) => [
-            styles.button,
-            {
-              backgroundColor: theme.link,
-              opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
-            },
-          ]}
-        >
-          <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-            Try Again
-          </Text>
-        </Pressable>
+        <View style={styles.buttonGroup}>
+          <Pressable
+            onPress={handleRestart}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: theme.primary,
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+              Try Again / Reload
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleResetData}
+            disabled={resetting}
+            style={({ pressed }) => [
+              styles.outlineButton,
+              {
+                borderColor: '#D4A843',
+                opacity: (pressed || resetting) ? 0.8 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.outlineButtonText, { color: '#D4A843' }]}>
+              {resetting ? "Resetting..." : "Reset App Cache"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
-      {__DEV__ ? (
-        <Modal
-          visible={isModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setIsModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.modalContainer,
-                { backgroundColor: theme.background },
-              ]}
-            >
-              <View
-                style={[
-                  styles.modalHeader,
-                  {
-                    borderBottomColor: isDark
-                      ? "rgba(255, 255, 255, 0.1)"
-                      : "rgba(0, 0, 0, 0.1)",
-                  },
-                ]}
-              >
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  Error Details
-                </Text>
-                <Pressable
-                  onPress={() => setIsModalVisible(false)}
-                  accessibilityLabel="Close error details"
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.closeButton,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
-                >
-                  <Feather name="x" size={24} color={theme.text} />
-                </Pressable>
-              </View>
-
-              <ScrollView
-                style={styles.modalScrollView}
-                contentContainerStyle={[
-                  styles.modalScrollContent,
-                  { paddingBottom: insets.bottom + 16 },
-                ]}
-                showsVerticalScrollIndicator
-              >
-                <View
-                  style={[
-                    styles.errorContainer,
-                    { backgroundColor: theme.backgroundSecondary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.errorText,
-                      {
-                        color: theme.text,
-                        fontFamily: monoFont,
-                      },
-                    ]}
-                    selectable
-                  >
-                    {formatErrorDetails()}
-                  </Text>
-                </View>
-              </ScrollView>
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.cardBackground }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)" }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Error Details</Text>
+              <Pressable onPress={() => setIsModalVisible(false)} style={styles.closeButton}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
             </View>
+
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <View style={[styles.errorContainer, { backgroundColor: theme.background }]}>
+                <Text style={[styles.errorText, { color: theme.text, fontFamily: monoFont }]} selectable>
+                  {formatErrorDetails()}
+                </Text>
+              </View>
+            </ScrollView>
           </View>
-        </Modal>
-      ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -186,47 +179,84 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
-  },
-  content: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    width: "100%",
-    maxWidth: 600,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 40,
-  },
-  message: {
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
+    padding: 20,
   },
   topButton: {
     position: "absolute",
-    right: 16,
+    right: 20,
+    top: 50,
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
   },
+  contentCard: {
+    width: "100%",
+    maxWidth: 450,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(212, 168, 67, 0.2)",
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  title: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 22,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
+    opacity: 0.6,
+  },
+  message: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  buttonGroup: {
+    width: "100%",
+    gap: 12,
+  },
   button: {
-    paddingVertical: 16,
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    minWidth: 200,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonText: {
-    fontWeight: "600",
-    textAlign: "center",
-    fontSize: 16,
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+  },
+  outlineButton: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  outlineButtonText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
   },
   modalOverlay: {
     flex: 1,
@@ -235,22 +265,22 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: "100%",
-    height: "90%",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    height: "80%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 18,
   },
   closeButton: {
     width: 44,
@@ -258,21 +288,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  modalScrollView: {
-    flex: 1,
-  },
   modalScrollContent: {
-    padding: 16,
+    padding: 20,
   },
   errorContainer: {
     width: "100%",
-    borderRadius: 8,
-    overflow: "hidden",
+    borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.05)",
   },
   errorText: {
     fontSize: 12,
     lineHeight: 18,
-    width: "100%",
   },
 });

@@ -150,13 +150,6 @@ export default function MasjidDetailScreen() {
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </Pressable>
         <View style={styles.topBarRight}>
-          <Pressable onPress={togglePrimary} style={[styles.topBarBtn, { marginRight: 8 }]}>
-            <Ionicons
-              name={isPrimary ? "star" : "star-outline"}
-              size={22}
-              color={isPrimary ? Colors.accent : Colors.text}
-            />
-          </Pressable>
           <Pressable onPress={handleShare} style={styles.topBarBtn}>
             <Ionicons name="share-outline" size={22} color={Colors.text} />
           </Pressable>
@@ -167,24 +160,38 @@ export default function MasjidDetailScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroSection}>
-          {isPrimary && (
-            <View style={styles.primaryBadge}>
-              <Ionicons name="star" size={12} color="#fff" />
-              <Text style={styles.primaryBadgeText}>Primary Masjid</Text>
-            </View>
-          )}
+        <View style={styles.heroCard}>
           <View style={styles.heroIcon}>
-            <Ionicons name="moon" size={36} color={Colors.primary} />
+            <Ionicons name="moon" size={30} color={Colors.primary} />
           </View>
           <Text style={styles.masjidName}>{masjid.name}</Text>
           <View style={styles.locationRow}>
-            <Ionicons name="location" size={16} color={Colors.accent} />
-            <Text style={styles.address}>{masjid.address}</Text>
+            <Ionicons name="location-outline" size={14} color={Colors.textSecondary} style={{ marginTop: 2 }} />
+            <Text style={styles.address}>{masjid.address}, {masjid.city}</Text>
           </View>
-          <View style={styles.cityBadge}>
-            <Text style={styles.cityText}>{masjid.city}</Text>
-          </View>
+          
+          <Pressable
+            style={({ pressed }) => [
+              styles.setPrimaryHeroBtn,
+              isPrimary ? styles.setPrimaryHeroBtnActive : null,
+              pressed && styles.btnPressed
+            ]}
+            onPress={togglePrimary}
+          >
+            <Ionicons
+              name={isPrimary ? "star" : "star-outline"}
+              size={15}
+              color={isPrimary ? "#fff" : Colors.primary}
+            />
+            <Text
+              style={[
+                styles.setPrimaryHeroBtnText,
+                isPrimary ? styles.setPrimaryHeroBtnTextActive : null
+              ]}
+            >
+              {isPrimary ? "Primary Masjid (Selected)" : "Set as Primary Masjid"}
+            </Text>
+          </Pressable>
         </View>
 
         {events.length > 0 && (
@@ -262,50 +269,47 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
-  heroSection: {
+  heroCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
-    paddingVertical: 20,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginBottom: 24,
+    marginTop: 8,
   },
   heroIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: Colors.overlay,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   masjidName: {
     fontFamily: "Poppins_700Bold",
-    fontSize: 24,
+    fontSize: 20,
     color: Colors.text,
     textAlign: "center",
+    lineHeight: 28,
   },
   locationRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 4,
     marginTop: 6,
+    paddingHorizontal: 20,
+    width: "100%",
   },
   address: {
     fontFamily: "Poppins_400Regular",
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     textAlign: "center",
-    flex: 1,
-  },
-  cityBadge: {
-    marginTop: 10,
-    backgroundColor: Colors.overlay,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  cityText: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 13,
-    color: Colors.primary,
+    flexShrink: 1,
   },
   sectionTitle: {
     fontFamily: "Poppins_600SemiBold",
@@ -367,6 +371,30 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
     color: Colors.error,
+  },
+  setPrimaryHeroBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.overlay,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  setPrimaryHeroBtnActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  setPrimaryHeroBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: Colors.primary,
+  },
+  setPrimaryHeroBtnTextActive: {
+    color: "#fff",
   },
   btnPressed: {
     opacity: 0.85,

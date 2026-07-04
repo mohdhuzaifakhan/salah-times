@@ -23,6 +23,13 @@ import {
   Amiri_400Regular,
   Amiri_700Bold,
 } from "@expo-google-fonts/amiri";
+import {
+  ScheherazadeNew_400Regular,
+  ScheherazadeNew_700Bold,
+} from "@expo-google-fonts/scheherazade-new";
+import {
+  Lateef_400Regular,
+} from "@expo-google-fonts/lateef";
 import Colors from "@/constants/colors";
 import { initializeAds } from "@/lib/ads";
 import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
@@ -122,6 +129,9 @@ export default function RootLayout() {
     Poppins_700Bold,
     Amiri_400Regular,
     Amiri_700Bold,
+    ScheherazadeNew_400Regular,
+    ScheherazadeNew_700Bold,
+    Lateef_400Regular,
   });
 
   useEffect(() => {
