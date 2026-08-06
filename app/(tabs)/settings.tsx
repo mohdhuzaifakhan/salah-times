@@ -1,29 +1,29 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, SafeAreaView, Linking, Share, Platform, ActivityIndicator } from 'react-native';
-import { showCustomAlert } from '@/lib/custom-alert';
-import { fetchAppUpdateConfig, compareVersions, CURRENT_VERSION } from '@/lib/updates';
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
 import Colors from '@/constants/colors';
-import { useQuran } from '@/lib/quran/context';
+import { showCustomAlert } from '@/lib/custom-alert';
+import { auth } from '@/lib/firebaseConfig';
 import { useHadith } from '@/lib/hadith/context';
 import { useLanguage } from '@/lib/language-context';
+import { useLocation } from '@/lib/location-context';
+import { usePrimaryMasjid } from '@/lib/primary-masjid-context';
+import { useQuran } from '@/lib/quran/context';
 import { Language } from '@/lib/translations';
-import { auth } from '@/lib/firebaseConfig';
+import { compareVersions, CURRENT_VERSION, fetchAppUpdateConfig } from '@/lib/updates';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from '@/lib/store';
-import { clearScheduledNotifications } from '@/lib/notifications';
-import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
-import { NativeHadithAdCard } from '@/components/ads/NativeHadithAdCard';
+import React, { useState } from 'react';
+import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
   const { preferences: quranPrefs, updatePreferences: updateQuranPrefs } = useQuran();
   const { preferences: hadithPrefs, updatePreferences: updateHadithPrefs } = useHadith();
   const { language, setLanguage, t } = useLanguage();
+  const { primaryMasjid, openSelectModal } = usePrimaryMasjid();
+  const { selectedCity, selectedState, openLocationModal } = useLocation();
 
-  const [primaryMasjidName, setPrimaryMasjidName] = useState<string | null>(null);
-  const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const handleManualUpdateCheck = async () => {
@@ -60,47 +60,6 @@ export default function SettingsScreen() {
     } finally {
       setCheckingUpdate(false);
     }
-  };
-
-  const loadPrimaryMasjid = useCallback(async () => {
-    try {
-      const id = await getPrimaryMasjidId();
-      setPrimaryMasjidId(id);
-      if (id) {
-        const msjd = await getMasjidById(id);
-        setPrimaryMasjidName(msjd ? msjd.name : "Unknown Masjid");
-      } else {
-        setPrimaryMasjidName(null);
-      }
-    } catch (error) {
-      console.error("Failed to load settings primary masjid:", error);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadPrimaryMasjid();
-    }, [loadPrimaryMasjid])
-  );
-
-  const handleUnlinkPrimary = async () => {
-    showCustomAlert(
-      "Unlink Primary Masjid",
-      "Are you sure you want to remove your primary masjid? You will no longer see its quick access dashboard on the Home tab.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            await savePrimaryMasjidId(null);
-            setPrimaryMasjidId(null);
-            setPrimaryMasjidName(null);
-            await clearScheduledNotifications();
-          },
-        },
-      ]
-    );
   };
 
   const handleLogout = () => {
@@ -306,18 +265,27 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('app_section')}</Text>
           <SettingItem
+            icon="location-outline"
+            title="App Location"
+            subtitle={selectedCity ? `${selectedCity}, ${selectedState || ""}` : "Not Selected"}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              openLocationModal();
+            }}
+            rightElement={
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            }
+          />
+          <SettingItem
             icon="star-outline"
             title="Primary Masjid"
-            subtitle={primaryMasjidName || "None (Select from Explore)"}
-            onPress={primaryMasjidId ? handleUnlinkPrimary : undefined}
+            subtitle={primaryMasjid ? primaryMasjid.name : "Select Primary Masjid"}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              openSelectModal();
+            }}
             rightElement={
-              primaryMasjidId ? (
-                <TouchableOpacity onPress={handleUnlinkPrimary} style={{ padding: 4 }}>
-                  <Ionicons name="trash-outline" size={20} color={Colors.error} />
-                </TouchableOpacity>
-              ) : (
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-              )
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
             }
           />
           <SettingItem

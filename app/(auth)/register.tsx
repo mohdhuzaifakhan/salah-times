@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,16 +17,24 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { useLocation } from "@/lib/location-context";
 
 export default function RegisterScreen() {
   const { admin, register } = useAuth();
+  const { locations } = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [masjidName, setMasjidName] = useState("");
-  const [city, setCity] = useState("");
+  const [selectedState, setSelectedState] = useState(locations[0]?.state || "Uttar Pradesh");
+  const [city, setCity] = useState(locations[0]?.cities[0] || "Rampur");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const availableCities = useMemo(() => {
+    const stDoc = locations.find((l) => l.state === selectedState);
+    return stDoc ? stDoc.cities : [];
+  }, [locations, selectedState]);
 
   if (!admin || admin.role !== "super_admin") {
     return (
@@ -149,12 +158,47 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>City</Text>
-          <View style={styles.inputWrap}>
+          <Text style={styles.label}>State</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+            {locations.map((loc) => {
+              const isSel = loc.state === selectedState;
+              return (
+                <TouchableOpacity
+                  key={loc.id}
+                  style={[styles.chip, isSel && styles.chipActive]}
+                  onPress={() => {
+                    setSelectedState(loc.state);
+                    if (loc.cities.length > 0) setCity(loc.cities[0]);
+                  }}
+                >
+                  <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{loc.state}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Select City</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+            {availableCities.map((c) => {
+              const isSel = c === city;
+              return (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.chip, isSel && styles.chipActive]}
+                  onPress={() => setCity(c)}
+                >
+                  <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <View style={[styles.inputWrap, { marginTop: 6 }]}>
             <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
             <TextInput
               style={styles.input}
-              placeholder="e.g. London"
+              placeholder="Or enter city manually"
               placeholderTextColor={Colors.textMuted}
               value={city}
               onChangeText={setCity}
@@ -306,5 +350,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     textAlign: "center",
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginRight: 6,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  chipTextActive: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
   },
 });

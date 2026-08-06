@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from "react";
+import Colors from "@/constants/colors";
+import { useAuth } from "@/lib/auth-context";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { deleteAdminNotification, getAdminNotifications, markNotificationAsRead } from "@/lib/store";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   View,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  SafeAreaView,
-  StatusBar,
 } from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { useAuth } from "@/lib/auth-context";
-import { getAdminNotifications, markNotificationAsRead, deleteAdminNotification } from "@/lib/store";
 
 interface AdminNotification {
   id: string;

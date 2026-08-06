@@ -50,7 +50,7 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     translationLanguage: 'en.sahih',
   });
   const [loading, setLoading] = useState(true);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | number | null>(null);
 
   const loadUserData = async () => {
     if (!auth.currentUser) {

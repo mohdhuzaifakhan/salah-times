@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth, updateMasjidAdminCredentials, deleteMasjidAndAuth } from "@/lib/auth-context";
 import { getMasjidById, updateMasjidDetails, getUserProfile, getUserProfileByEmail } from "@/lib/store";
+import { useLocation } from "@/lib/location-context";
 import * as Clipboard from "expo-clipboard";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 
@@ -23,6 +26,7 @@ export default function EditMasjidDetailsScreen() {
   const { masjidId } = useLocalSearchParams<{ masjidId: string }>();
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
+  const { locations } = useLocation();
 
   const canManageCredentials = 
     admin?.role === "super_admin" || 
@@ -30,6 +34,7 @@ export default function EditMasjidDetailsScreen() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [selectedState, setSelectedState] = useState(locations[0]?.state || "Uttar Pradesh");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [origEmail, setOrigEmail] = useState("");
@@ -37,6 +42,11 @@ export default function EditMasjidDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const availableCities = useMemo(() => {
+    const stDoc = locations.find((l) => l.state === selectedState);
+    return stDoc ? stDoc.cities : [];
+  }, [locations, selectedState]);
 
   useEffect(() => {
     let isMounted = true;
@@ -61,6 +71,15 @@ export default function EditMasjidDetailsScreen() {
             setAddress(m.address);
             setCity(m.city);
             setAdminUid(m.adminUid);
+
+            if (m.city && locations.length > 0) {
+              const matchedLoc = locations.find((l) =>
+                l.cities.some((c) => c.toLowerCase() === m.city.toLowerCase())
+              );
+              if (matchedLoc) {
+                setSelectedState(matchedLoc.state);
+              }
+            }
 
             const canManageCreds =
               admin?.role === "super_admin" ||
@@ -259,12 +278,51 @@ export default function EditMasjidDetailsScreen() {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>City</Text>
+          <Text style={styles.label}>State</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+            {locations.map((loc) => {
+              const isSel = loc.state === selectedState;
+              return (
+                <TouchableOpacity
+                  key={loc.id}
+                  style={[styles.chip, isSel && styles.chipActive]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedState(loc.state);
+                    if (loc.cities.length > 0) setCity(loc.cities[0]);
+                  }}
+                >
+                  <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{loc.state}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Select City</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+            {availableCities.map((c) => {
+              const isSel = c.toLowerCase() === city.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.chip, isSel && styles.chipActive]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCity(c);
+                  }}
+                >
+                  <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { marginTop: 8 }]}
             value={city}
             onChangeText={setCity}
-            placeholder="e.g. New Delhi"
+            placeholder="Or enter city name manually"
             placeholderTextColor={Colors.textMuted}
           />
         </View>
@@ -485,5 +543,27 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.7,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginRight: 6,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  chipTextActive: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
   },
 });

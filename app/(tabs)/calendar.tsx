@@ -4,10 +4,10 @@ import {
   Text, 
   StyleSheet, 
   ScrollView, 
-  SafeAreaView, 
   StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useCalendar } from '@/lib/calendar/context';
 import { useLanguage } from '@/lib/language-context';

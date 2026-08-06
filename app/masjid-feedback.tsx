@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from "react";
+import Colors from "@/constants/colors";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { deleteMasjidMessage, getMasjidMessages } from "@/lib/store";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   View,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  SafeAreaView,
-  StatusBar,
 } from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
-import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { getMasjidMessages, deleteMasjidMessage } from "@/lib/store";
 
 interface MasjidMessage {
   id: string;

@@ -6,13 +6,12 @@ import {
   FlatList, 
   TouchableOpacity, 
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   Dimensions,
   Platform
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { fetchSurahDetail, SurahDetail, getAudioUrl, fetchQuranPage } from '@/lib/quran/api';

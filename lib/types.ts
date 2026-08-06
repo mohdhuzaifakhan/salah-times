@@ -11,11 +11,18 @@ export interface Masjid {
   id: string;
   name: string;
   city: string;
+  state?: string;
   address: string;
   adminUid: string;
   adminEmail?: string;
   timetable: Timetable;
   createdAt: number;
+}
+
+export interface LocationState {
+  id: string;
+  state: string;
+  cities: string[];
 }
 
 export interface AdminUser {

@@ -6,14 +6,13 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Platform,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { fetchSurahList, Surah, isQuranSynced, syncFullQuran } from '@/lib/quran/api';
 import { SURA_START_PAGES, PARAH_LIST, ParahMapping } from '@/lib/quran/constants';
@@ -22,6 +21,8 @@ import { useQuran } from '@/lib/quran/context';
 import { useLanguage } from '@/lib/language-context';
 import { QuranSkeleton } from '@/components/Skeleton';
 import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import { VoiceSearchButton } from '@/components/voice-search-button';
+import { fuzzyMatch } from '@/lib/fuzzy-search';
 
 const getSurahForPage = (page: number) => {
   let activeSurah = SURA_START_PAGES[0];
@@ -92,19 +93,19 @@ export default function QuranHomeScreen() {
   };
 
   const filteredSurahs = useMemo(() => {
-    return surahs.filter(s =>
-      s.englishName.toLowerCase().includes(search.toLowerCase()) ||
-      s.name.includes(search) ||
-      s.englishNameTranslation.toLowerCase().includes(search.toLowerCase())
-    );
+    if (!search) return surahs;
+    return surahs.filter(s => {
+      const combined = `${s.englishName} ${s.name} ${s.englishNameTranslation} ${s.number}`;
+      return fuzzyMatch(combined, search);
+    });
   }, [surahs, search]);
 
   const filteredParahs = useMemo(() => {
-    return PARAH_LIST.filter(p =>
-      p.englishName.toLowerCase().includes(search.toLowerCase()) ||
-      p.arabicName.includes(search) ||
-      `parah ${p.number}`.includes(search.toLowerCase())
-    );
+    if (!search) return PARAH_LIST;
+    return PARAH_LIST.filter(p => {
+      const combined = `${p.englishName} ${p.arabicName} parah ${p.number}`;
+      return fuzzyMatch(combined, search);
+    });
   }, [search]);
 
   const handleSuraPress = (surahNumber: number) => {
@@ -189,12 +190,16 @@ export default function QuranHomeScreen() {
         <View style={styles.searchBar}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search"
+            placeholder="Search surah or parah..."
             value={search}
             onChangeText={setSearch}
             placeholderTextColor={Colors.textMuted}
           />
-          <Ionicons name="search" size={20} color={Colors.textMuted} />
+          {search ? (
+            <Ionicons name="close-circle" size={20} color={Colors.textMuted} onPress={() => setSearch("")} />
+          ) : (
+            <VoiceSearchButton onTranscript={setSearch} size={20} color={Colors.textMuted} />
+          )}
         </View>
       </View>
 

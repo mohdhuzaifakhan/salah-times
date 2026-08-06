@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { createAudioPlayer, AudioPlayer } from 'expo-audio';
 
 export const useAudioPlayer = () => {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -10,49 +10,32 @@ export const useAudioPlayer = () => {
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    return sound
-      ? () => {
-          sound.unloadAsync();
-        }
-      : undefined;
-  }, [sound]);
-
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis);
-      setDuration(status.durationMillis || 0);
-      setIsPlaying(status.isPlaying);
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-        setPosition(0);
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.pause();
       }
-    } else {
-      if (status.error) {
-        console.error(`Playback Error: ${status.error}`);
-      }
-    }
-  };
+    };
+  }, []);
 
   const playAudio = async (url: string) => {
     try {
-      if (sound) {
-        if (currentUrl === url) {
-          await sound.playAsync();
-          return;
-        }
-        await sound.unloadAsync();
+      if (playerRef.current && currentUrl === url) {
+        playerRef.current.play();
+        setIsPlaying(true);
+        return;
+      }
+      if (playerRef.current) {
+        playerRef.current.pause();
       }
 
       setIsLoading(true);
       setCurrentUrl(url);
-      
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: url },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-      
-      setSound(newSound);
+
+      const player = createAudioPlayer(url);
+      playerRef.current = player;
+
+      player.play();
+      setIsPlaying(true);
       setIsLoading(false);
     } catch (error) {
       console.error('Error playing audio:', error);
@@ -61,28 +44,32 @@ export const useAudioPlayer = () => {
   };
 
   const pauseAudio = async () => {
-    if (sound) {
-      await sound.pauseAsync();
+    if (playerRef.current) {
+      playerRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
   const stopAudio = async () => {
-    if (sound) {
-      await sound.stopAsync();
+    if (playerRef.current) {
+      playerRef.current.pause();
+      playerRef.current.seekTo(0);
+      setIsPlaying(false);
     }
   };
 
   const togglePlayback = async () => {
     if (isPlaying) {
       await pauseAudio();
-    } else if (sound) {
-      await sound.playAsync();
+    } else if (playerRef.current) {
+      playerRef.current.play();
+      setIsPlaying(true);
     }
   };
 
   const seekTo = async (millis: number) => {
-    if (sound) {
-      await sound.setPositionAsync(millis);
+    if (playerRef.current) {
+      playerRef.current.seekTo(millis / 1000);
     }
   };
 

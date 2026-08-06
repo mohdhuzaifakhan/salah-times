@@ -14,14 +14,15 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useLanguage } from "@/lib/language-context";
-import { getMasjidById, getMasjidEvents, getPrimaryMasjidId, savePrimaryMasjidId } from "@/lib/store";
+import { getMasjidById, getMasjidEvents } from "@/lib/store";
 import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
-import { schedulePrimaryMasjidNotifications, clearScheduledNotifications } from "@/lib/notifications";
 import { EventCard } from "@/components/EventCard";
 import { MasjidDetailSkeleton } from "@/components/Skeleton";
 import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
 import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
 
 function formatTime(time: string): string {
   if (!time || !time.includes(":")) return "--:--";
@@ -37,10 +38,12 @@ export default function MasjidDetailScreen() {
   const { t } = useLanguage();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { primaryMasjidId, selectPrimaryMasjid, openSelectModal } = usePrimaryMasjid();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPrimary, setIsPrimary] = useState(false);
+
+  const isPrimary = primaryMasjidId === id;
 
   useEffect(() => {
     let isMounted = true;
@@ -48,22 +51,19 @@ export default function MasjidDetailScreen() {
     if (id) {
       (async () => {
         try {
-          const [m, e, primaryId] = await Promise.all([
+          const [m, e] = await Promise.all([
             getMasjidById(id),
             getMasjidEvents(id),
-            getPrimaryMasjidId()
           ]);
           if (isMounted) {
             setMasjid(m);
             setEvents(e);
-            setIsPrimary(primaryId === id);
           }
         } catch (error) {
           console.error("Failed to load masjid details:", error);
           if (isMounted) {
             setMasjid(null);
             setEvents([]);
-            setIsPrimary(false);
           }
         } finally {
           if (isMounted) setLoading(false);
@@ -82,18 +82,22 @@ export default function MasjidDetailScreen() {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       if (isPrimary) {
-        await savePrimaryMasjidId(null);
-        setIsPrimary(false);
-        await clearScheduledNotifications();
-      } else {
-        await savePrimaryMasjidId(id);
-        setIsPrimary(true);
-        if (masjid) {
-          await schedulePrimaryMasjidNotifications(masjid);
-        }
+        showCustomAlert(
+          "Primary Masjid",
+          `${masjid?.name || "This masjid"} is currently set as your primary masjid.`,
+          [
+            { text: "OK", style: "cancel" },
+            {
+              text: "Change Primary Masjid",
+              onPress: () => openSelectModal(),
+            },
+          ]
+        );
+      } else if (id) {
+        await selectPrimaryMasjid(id);
       }
     } catch (error) {
-      console.error("Failed to toggle primary masjid:", error);
+      console.error("Failed to set primary masjid:", error);
     }
   };
 

@@ -1,21 +1,22 @@
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  SafeAreaView,
-  StatusBar,
-} from "react-native";
+import Colors from "@/constants/colors";
 import { showCustomAlert } from "@/lib/custom-alert";
-import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { deleteAppMessage, getAppMessages } from "@/lib/store";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { getAppMessages, deleteAppMessage } from "@/lib/store";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Linking,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface AppMessage {
   id: string;
@@ -110,10 +111,19 @@ export default function ManageGlobalFeedbackScreen() {
               <View style={styles.cardHeader}>
                 <View style={styles.infoCol}>
                   {item.phone ? (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="call-outline" size={16} color={Colors.primary} />
-                      <Text style={styles.infoText}>{item.phone}</Text>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.phoneCallBtn}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        void Linking.openURL(`tel:${item.phone}`);
+                      }}
+                    >
+                      <Ionicons name="call" size={14} color="#ffffff" />
+                      <Text style={styles.phoneCallText}>{item.phone}</Text>
+                      <View style={styles.callTag}>
+                        <Text style={styles.callTagText}>Call</Text>
+                      </View>
+                    </TouchableOpacity>
                   ) : null}
                   {item.email ? (
                     <View style={styles.infoRow}>
@@ -252,6 +262,32 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
     color: Colors.text,
+  },
+  phoneCallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    gap: 6,
+  },
+  phoneCallText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: "#ffffff",
+  },
+  callTag: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  callTagText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
+    color: "#ffffff",
   },
   subjectLabel: {
     fontFamily: "Poppins_700Bold",

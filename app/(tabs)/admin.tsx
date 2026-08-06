@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   TextInput,
 } from "react-native";
+import { Modal, TouchableOpacity, FlatList } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,28 +17,108 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, getAppMessages } from "@/lib/store";
+import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, getAppMessages, addState, addCityToState } from "@/lib/store";
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
+import { useLocation } from "@/lib/location-context";
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
   const { admin, isLoading, logout } = useAuth();
+  const { locations, selectedCity, refreshLocations } = useLocation();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [loadingMasjid, setLoadingMasjid] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [adminCityFilter, setAdminCityFilter] = useState<string>("All");
   const [stats, setStats] = useState({
     totalMasjids: 0,
     totalEvents: 0,
     totalFeedbacks: 0,
   });
 
+  const configuredCitiesSet = useMemo(() => {
+    const set = new Set<string>();
+    locations.forEach((loc) => {
+      loc.cities.forEach((c) => set.add(c.trim().toLowerCase()));
+    });
+    return set;
+  }, [locations]);
+
+  const allCitiesList = useMemo(() => {
+    const list: string[] = ["All"];
+    locations.forEach((loc) => {
+      loc.cities.forEach((c) => {
+        if (!list.includes(c)) list.push(c);
+      });
+    });
+    list.push("Other");
+    return list;
+  }, [locations]);
+
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [newStateName, setNewStateName] = useState("");
+  const [newCityName, setNewCityName] = useState("");
+  const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
+  const [isAddingLocation, setIsAddingLocation] = useState(false);
+
+  const handleAddState = async () => {
+    if (!newStateName.trim()) {
+      showCustomAlert("Error", "Please enter a state name.");
+      return;
+    }
+    setIsAddingLocation(true);
+    try {
+      const createdState = await addState(newStateName);
+      await refreshLocations();
+      setSelectedStateId(createdState.id);
+      setNewStateName("");
+      showCustomAlert("Success", `Added State: ${createdState.state}`);
+    } catch (e) {
+      showCustomAlert("Error", "Failed to add state.");
+    } finally {
+      setIsAddingLocation(false);
+    }
+  };
+
+  const handleAddCity = async () => {
+    const targetId = selectedStateId || (locations[0]?.id);
+    if (!targetId) {
+      showCustomAlert("Error", "Please select or create a State first.");
+      return;
+    }
+    if (!newCityName.trim()) {
+      showCustomAlert("Error", "Please enter a city name.");
+      return;
+    }
+    setIsAddingLocation(true);
+    try {
+      await addCityToState(targetId, newCityName);
+      await refreshLocations();
+      setNewCityName("");
+      showCustomAlert("Success", `Added City: ${newCityName.trim()}`);
+    } catch (e) {
+      showCustomAlert("Error", "Failed to add city.");
+    } finally {
+      setIsAddingLocation(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
-      setLoadingMasjid(true);
+      
+      // Only show full loader on initial fetch when no data is cached yet
+      setMasjids((currentMasjids) => {
+        setMasjid((currentMasjid) => {
+          if (currentMasjids.length === 0 && !currentMasjid) {
+            setLoadingMasjid(true);
+          }
+          return currentMasjid;
+        });
+        return currentMasjids;
+      });
 
       const fetchNotifications = async () => {
         if (!admin) return;
@@ -172,11 +253,23 @@ export default function AdminScreen() {
     );
   }
 
-  const filteredMasjids = masjids.filter(
-    (m) =>
+  const filteredMasjids = masjids.filter((m) => {
+    const matchesSearch =
+      !searchQuery ||
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.city.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      m.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.address && m.address.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesCity = (() => {
+      if (adminCityFilter === "All") return true;
+      if (adminCityFilter === "Other") {
+        return !m.city || !configuredCitiesSet.has(m.city.trim().toLowerCase());
+      }
+      return m.city.trim().toLowerCase() === adminCityFilter.trim().toLowerCase();
+    })();
+
+    return matchesSearch && matchesCity;
+  });
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
@@ -287,6 +380,23 @@ export default function AdminScreen() {
                 ]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowLocationModal(true);
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(13, 115, 119, 0.08)" }]}>
+                  <Ionicons name="location-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionTitle}>Manage Cities</Text>
+                <Text style={styles.actionDesc}>Add States & Cities</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push("/manage-global-feedback");
                 }}
               >
@@ -322,6 +432,33 @@ export default function AdminScreen() {
                 </Pressable>
               )}
             </View>
+
+            {/* Location Filter Chips Bar */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminCityScroll}>
+              {allCitiesList.map((c) => {
+                const isSel = adminCityFilter === c;
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.adminCityChip, isSel && styles.adminCityChipActive]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setAdminCityFilter(c);
+                    }}
+                  >
+                    <Ionicons
+                      name={c === "All" ? "globe-outline" : "location-outline"}
+                      size={13}
+                      color={isSel ? "#FFFFFF" : Colors.primary}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={[styles.adminCityChipText, isSel && styles.adminCityChipTextActive]}>
+                      {c}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             {/* Masjid Cards List */}
             {filteredMasjids.length === 0 ? (
@@ -517,6 +654,112 @@ export default function AdminScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Location Management Modal */}
+      <Modal
+        visible={showLocationModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLocationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Manage States & Cities</Text>
+              <TouchableOpacity onPress={() => setShowLocationModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              {/* Add State Form */}
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Add New State</Text>
+                <View style={styles.locFormRow}>
+                  <TextInput
+                    style={styles.locInput}
+                    placeholder="e.g. Maharashtra"
+                    placeholderTextColor={Colors.textMuted}
+                    value={newStateName}
+                    onChangeText={setNewStateName}
+                  />
+                  <TouchableOpacity
+                    style={[styles.locAddBtn, isAddingLocation && styles.btnDisabled]}
+                    onPress={handleAddState}
+                    disabled={isAddingLocation}
+                  >
+                    {isAddingLocation ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.locAddBtnText}>Add State</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Add City Form */}
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Add City to State</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  {locations.map((loc) => {
+                    const isSel = (selectedStateId || locations[0]?.id) === loc.id;
+                    return (
+                      <TouchableOpacity
+                        key={loc.id}
+                        style={[styles.locStateChip, isSel && styles.locStateChipActive]}
+                        onPress={() => setSelectedStateId(loc.id)}
+                      >
+                        <Text style={[styles.locStateChipText, isSel && styles.locStateChipTextActive]}>
+                          {loc.state}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.locFormRow}>
+                  <TextInput
+                    style={styles.locInput}
+                    placeholder="e.g. Mumbai, Pune..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={newCityName}
+                    onChangeText={setNewCityName}
+                  />
+                  <TouchableOpacity
+                    style={[styles.locAddBtn, isAddingLocation && styles.btnDisabled]}
+                    onPress={handleAddCity}
+                    disabled={isAddingLocation}
+                  >
+                    {isAddingLocation ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.locAddBtnText}>Add City</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* List Current States & Cities */}
+              <Text style={[styles.sectionHeaderTitle, { marginTop: 12 }]}>Configured Locations</Text>
+              {locations.map((loc) => (
+                <View key={loc.id} style={styles.locListCard}>
+                  <Text style={styles.locListStateName}>{loc.state}</Text>
+                  <View style={styles.locCitiesWrap}>
+                    {loc.cities.length > 0 ? (
+                      loc.cities.map((c) => (
+                        <View key={c} style={styles.locCityBadge}>
+                          <Text style={styles.locCityText}>{c}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noCitiesText}>No cities added yet.</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -917,12 +1160,12 @@ const styles = StyleSheet.create({
   },
   actionGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 24,
   },
   actionCard: {
-    flex: 1,
+    width: "31%",
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 12,
@@ -989,5 +1232,165 @@ const styles = StyleSheet.create({
   },
   searchClearBtn: {
     padding: 2,
+  },
+  adminCityScroll: {
+    marginBottom: 16,
+  },
+  adminCityChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginRight: 6,
+  },
+  adminCityChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  adminCityChipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  adminCityChipTextActive: {
+    color: "#FFFFFF",
+    fontFamily: "Poppins_600SemiBold",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "85%",
+    minHeight: "65%",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: Colors.primary,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  locFormCard: {
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  locFormTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  locFormRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  locInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.text,
+  },
+  locAddBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  locAddBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: "#fff",
+  },
+  locStateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginRight: 6,
+  },
+  locStateChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  locStateChipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  locStateChipTextActive: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+  },
+  locListCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  locListStateName: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  locCitiesWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  locCityBadge: {
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  locCityText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.text,
+  },
+  noCitiesText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: "italic",
   },
 });

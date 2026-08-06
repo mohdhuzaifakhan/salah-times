@@ -1,31 +1,32 @@
-import React, { useState, useCallback, useMemo } from "react";
+import { EventCard } from "@/components/EventCard";
+import { MasjidCard } from "@/components/MasjidCard";
+import { ExploreSkeleton } from "@/components/Skeleton";
+import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
+import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+import Colors from "@/constants/colors";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useLanguage } from "@/lib/language-context";
+import { useLocation } from "@/lib/location-context";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
+import { getAllMasjids, getGlobalEvents } from "@/lib/store";
+import { AppEvent, Masjid } from "@/lib/types";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import { VoiceSearchButton } from "@/components/voice-search-button";
+import { fuzzyMatch } from "@/lib/fuzzy-search";
 import {
-  StyleSheet,
-  Text,
-  View,
   FlatList,
-  TextInput,
-  RefreshControl,
   Platform,
   Pressable,
-  Modal,
-  TouchableOpacity,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { Masjid, AppEvent } from "@/lib/types";
-import { getAllMasjids, getGlobalEvents, getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from "@/lib/store";
-import { schedulePrimaryMasjidNotifications, clearScheduledNotifications } from "@/lib/notifications";
-import { MasjidCard } from "@/components/MasjidCard";
-import { EventCard } from "@/components/EventCard";
-import { ExploreSkeleton } from "@/components/Skeleton";
-import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
-import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 
 function formatTimeCompact(time: string): string {
   if (!time) return "";
@@ -39,72 +40,38 @@ function formatTimeCompact(time: string): string {
 export default function ExploreScreen() {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { primaryMasjid, primaryMasjidId, openSelectModal, refreshPrimaryMasjid } = usePrimaryMasjid();
+  const { selectedCity, selectedState, locations, openLocationModal, selectLocation } = useLocation();
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [primaryMasjid, setPrimaryMasjid] = useState<Masjid | null>(null);
-  const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
-  const [showMasjidModal, setShowMasjidModal] = useState(false);
-  const [masjidSearch, setMasjidSearch] = useState("");
+
+  const configuredCitiesSet = useMemo(() => {
+    const set = new Set<string>();
+    locations.forEach((loc) => {
+      loc.cities.forEach((c) => set.add(c.trim().toLowerCase()));
+    });
+    return set;
+  }, [locations]);
 
   const loadData = useCallback(async () => {
     try {
-      const [masjidsData, eventsData, primaryId] = await Promise.all([
+      const [masjidsData, eventsData] = await Promise.all([
         getAllMasjids(),
         getGlobalEvents(),
-        getPrimaryMasjidId(),
+        refreshPrimaryMasjid(),
       ]);
       setMasjids(masjidsData);
       setEvents(eventsData);
-      setPrimaryMasjidId(primaryId);
-      if (primaryId) {
-        const primaryData = masjidsData.find((m) => m.id === primaryId) || (await getMasjidById(primaryId));
-        setPrimaryMasjid(primaryData);
-      } else {
-        setPrimaryMasjid(null);
-      }
     } catch (error) {
       console.error("Failed to load data:", error);
       showCustomAlert("Error", "Failed to load data. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const handleSelectPrimaryMasjid = async (masjidId: string | null) => {
-    try {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      if (masjidId) {
-        await savePrimaryMasjidId(masjidId);
-        setPrimaryMasjidId(masjidId);
-        const selected = masjids.find((m) => m.id === masjidId) || (await getMasjidById(masjidId));
-        setPrimaryMasjid(selected);
-        if (selected) {
-          await schedulePrimaryMasjidNotifications(selected);
-        }
-      } else {
-        await savePrimaryMasjidId(null);
-        setPrimaryMasjidId(null);
-        setPrimaryMasjid(null);
-        await clearScheduledNotifications();
-      }
-      setShowMasjidModal(false);
-      setMasjidSearch("");
-    } catch (e) {
-      console.error("Failed to set primary masjid:", e);
-      showCustomAlert("Error", "Failed to select primary masjid. Please try again.");
-    }
-  };
-
-  const filteredForDropdown = useMemo(() => {
-    return masjids.filter(
-      (m) =>
-        m.name.toLowerCase().includes(masjidSearch.toLowerCase()) ||
-        m.city.toLowerCase().includes(masjidSearch.toLowerCase())
-    );
-  }, [masjids, masjidSearch]);
+  }, [refreshPrimaryMasjid]);
 
   useFocusEffect(
     useCallback(() => {
@@ -118,11 +85,17 @@ export default function ExploreScreen() {
     setRefreshing(false);
   };
 
-  const filtered = masjids.filter(
-    (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.city.toLowerCase().includes(search.toLowerCase())
-  );
+  const currentCity = selectedCity || "Rampur";
+
+  const filtered = masjids.filter((m) => {
+    const combinedInfo = `${m.name} ${m.city} ${m.address || ""}`;
+    const matchesSearch = !search || fuzzyMatch(combinedInfo, search);
+    const matchesCity =
+      currentCity === "Other"
+        ? !m.city || !configuredCitiesSet.has(m.city.trim().toLowerCase())
+        : m.city.trim().toLowerCase() === currentCity.trim().toLowerCase();
+    return matchesSearch && matchesCity;
+  });
 
   const filteredWithAds = useMemo(() => {
     const result: (Masjid | { isAd: true; id: string })[] = [];
@@ -142,23 +115,40 @@ export default function ExploreScreen() {
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
       <View style={styles.headerSection}>
         <View style={styles.greetingRow}>
-          <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
+            <Pressable
+              style={styles.locationChip}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openLocationModal();
+              }}
+            >
+              <Ionicons name="location" size={13} color={Colors.primary} />
+              <Text style={styles.locationChipText} numberOfLines={1}>
+                {selectedCity ? `${selectedCity}, ${selectedState || ""}` : "Select Location"}
+              </Text>
+              <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+
           <Pressable
             style={styles.headerDropdownSelectBox}
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowMasjidModal(true);
+              openSelectModal();
             }}
           >
             <Ionicons name="star" size={13} color={primaryMasjid ? Colors.accent : Colors.textMuted} />
             <Text style={styles.headerDropdownSelectText} numberOfLines={1}>
-              {primaryMasjid ? primaryMasjid.name : "Select Primary Masjid"}
+              {primaryMasjid ? primaryMasjid.name : "Select Primary"}
             </Text>
             <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
           </Pressable>
         </View>
         <Text style={styles.title}>{t('find_prayer_times')}</Text>
       </View>
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={Colors.textMuted} />
         <TextInput
@@ -170,95 +160,17 @@ export default function ExploreScreen() {
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {search.length > 0 && (
+        {search.length > 0 ? (
           <Ionicons
             name="close-circle"
             size={18}
             color={Colors.textMuted}
             onPress={() => setSearch("")}
           />
+        ) : (
+          <VoiceSearchButton onTranscript={setSearch} size={18} color={Colors.textMuted} />
         )}
       </View>
-
-      {/* Dropdown Masjid Selector Modal */}
-      <Modal visible={showMasjidModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Primary Masjid</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowMasjidModal(false);
-                  setMasjidSearch("");
-                }}
-                style={styles.closeBtn}
-              >
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalSearchBox}>
-              <Ionicons name="search" size={20} color={Colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search Masjid..."
-                value={masjidSearch}
-                onChangeText={setMasjidSearch}
-                placeholderTextColor={Colors.textMuted}
-              />
-              {masjidSearch !== "" && (
-                <TouchableOpacity onPress={() => setMasjidSearch("")}>
-                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <FlatList
-              data={filteredForDropdown}
-              keyExtractor={(item) => item.id}
-              ListHeaderComponent={
-                primaryMasjidId ? (
-                  <TouchableOpacity
-                    style={styles.modalClearItem}
-                    onPress={() => handleSelectPrimaryMasjid(null)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color={Colors.error} style={{ marginRight: 12 }} />
-                    <Text style={styles.modalClearText}>Remove Primary Masjid</Text>
-                  </TouchableOpacity>
-                ) : null
-              }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalMasjidItem}
-                  onPress={() => handleSelectPrimaryMasjid(item.id)}
-                >
-                  <View style={styles.modalMasjidIcon}>
-                    <Ionicons
-                      name="moon-outline"
-                      size={18}
-                      color={item.id === primaryMasjidId ? Colors.accent : Colors.primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.modalMasjidName}>{item.name}</Text>
-                    <Text style={styles.modalMasjidCity}>{item.city}</Text>
-                  </View>
-                  {item.id === primaryMasjidId && (
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
-                  )}
-                </TouchableOpacity>
-              )}
-              contentContainerStyle={{ paddingBottom: 30 }}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.modalEmptyState}>
-                  <Text style={styles.modalEmptyText}>No masjids found matching your search.</Text>
-                </View>
-              }
-            />
-          </View>
-        </View>
-      </Modal>
       {loading ? (
         <ExploreSkeleton />
       ) : (
@@ -352,18 +264,40 @@ export default function ExploreScreen() {
                 </View>
               ) : null}
 
-              {filtered.length > 0 ? (
-                <Text style={styles.subSectionTitle}>Explore Masjids</Text>
-              ) : null}
+              <View style={styles.exploreHeaderRow}>
+                <Text style={styles.subSectionTitle}>
+                  {`Masjids in ${currentCity}`}
+                </Text>
+              </View>
             </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyTitle}>No masjids found</Text>
-              <Text style={styles.emptyText}>
-                Try a different masjid name
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="location-outline" size={36} color={Colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {search
+                  ? `No masjids found matching "${search}"`
+                  : `No registered masjids in ${currentCity}`}
               </Text>
+              <Text style={styles.emptyText}>
+                {currentCity.toLowerCase() !== "rampur"
+                  ? "Currently, registered masjids are available in Rampur."
+                  : "Try searching for a different masjid name."}
+              </Text>
+              {currentCity.toLowerCase() !== "rampur" && (
+                <Pressable
+                  style={styles.switchCityBtn}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    void selectLocation("Rampur", "Uttar Pradesh");
+                  }}
+                >
+                  <Ionicons name="location" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.switchCityBtnText}>Switch to Rampur</Text>
+                </Pressable>
+              )}
             </View>
           }
         />
@@ -382,6 +316,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 4,
+  },
+  // greetingRow: {
+  //   flexDirection: "row",
+  //   alignItems: "center",
+  //   justifyContent: "space-between",
+  //   gap: 10,
+  // },
+  locationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    gap: 4,
+  },
+  locationChipText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: Colors.primary,
   },
   greeting: {
     fontFamily: "Poppins_400Regular",
@@ -429,18 +380,32 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 80,
-    gap: 8,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    width: "100%",
+  },
+  emptyIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: Colors.overlay,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   emptyTitle: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 17,
     color: Colors.text,
+    textAlign: "center",
+    marginBottom: 6,
   },
   emptyText: {
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: Colors.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
   },
   subSectionTitle: {
     fontFamily: "Poppins_600SemiBold",
@@ -632,5 +597,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
     textAlign: "center",
+  },
+  exploreHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  allCitiesBtn: {
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  allCitiesBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  switchCityBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginTop: 18,
+    alignSelf: "center",
+  },
+  switchCityBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#ffffff",
   },
 });

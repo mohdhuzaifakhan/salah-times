@@ -1,4 +1,4 @@
-import { Masjid, AdminUser, AppEvent } from "./types";
+import { Masjid, AdminUser, AppEvent, LocationState } from "./types";
 import { db } from "./firebaseConfig";
 import {
   collection,
@@ -10,13 +10,15 @@ import {
   deleteDoc,
   query,
   where,
-  limit
+  limit,
+  arrayUnion
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const MASJIDS_COLLECTION = "masjids";
 const USERS_COLLECTION = "users";
 const EVENTS_COLLECTION = "events";
+const LOCATIONS_COLLECTION = "locations";
 
 export async function getAllMasjids(): Promise<Masjid[]> {
   try {
@@ -518,6 +520,64 @@ export async function deleteAppMessage(id: string): Promise<boolean> {
   } catch (error) {
     console.error("Error deleting app message:", error);
     return false;
+  }
+}
+
+// Location (State & City) Management
+const DEFAULT_LOCATIONS: LocationState[] = [
+  {
+    id: "uttar_pradesh",
+    state: "Uttar Pradesh",
+    cities: ["Rampur", "Moradabad", "Bareilly", "Sambhal"],
+  },
+];
+
+export async function getLocations(): Promise<LocationState[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, LOCATIONS_COLLECTION));
+    if (querySnapshot.empty) {
+      // Seed default locations into Firestore
+      for (const loc of DEFAULT_LOCATIONS) {
+        await setDoc(doc(db, LOCATIONS_COLLECTION, loc.id), loc);
+      }
+      return DEFAULT_LOCATIONS;
+    }
+    const locations: LocationState[] = [];
+    querySnapshot.forEach((docSnap) => {
+      locations.push(docSnap.data() as LocationState);
+    });
+    return locations.sort((a, b) => a.state.localeCompare(b.state));
+  } catch (error) {
+    console.error("Error getting locations:", error);
+    return DEFAULT_LOCATIONS;
+  }
+}
+
+export async function addState(stateName: string): Promise<LocationState> {
+  try {
+    const docId = stateName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const newLocation: LocationState = {
+      id: docId,
+      state: stateName.trim(),
+      cities: [],
+    };
+    await setDoc(doc(db, LOCATIONS_COLLECTION, docId), newLocation);
+    return newLocation;
+  } catch (error) {
+    console.error("Error adding state:", error);
+    throw error;
+  }
+}
+
+export async function addCityToState(stateId: string, cityName: string): Promise<void> {
+  try {
+    const docRef = doc(db, LOCATIONS_COLLECTION, stateId);
+    await updateDoc(docRef, {
+      cities: arrayUnion(cityName.trim()),
+    });
+  } catch (error) {
+    console.error("Error adding city to state:", error);
+    throw error;
   }
 }
 

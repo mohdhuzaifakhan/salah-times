@@ -32,7 +32,10 @@ import {
 } from "@expo-google-fonts/lateef";
 import Colors from "@/constants/colors";
 import { initializeAds } from "@/lib/ads";
-import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
+import { refreshPrimaryMasjidNotifications, setupPrayerAlarmListeners } from "@/lib/notifications";
+import { PrimaryMasjidProvider } from "@/lib/primary-masjid-context";
+import { PrayerAlarmModal } from "@/components/PrayerAlarmModal";
+import { LocationProvider } from "@/lib/location-context";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -139,6 +142,8 @@ export default function RootLayout() {
       void SplashScreen.hideAsync();
       void initializeAds();
       void refreshPrimaryMasjidNotifications();
+      const unsubscribe = setupPrayerAlarmListeners();
+      return () => unsubscribe();
     }
   }, [fontsLoaded]);
 
@@ -149,19 +154,24 @@ export default function RootLayout() {
       <StatusBar style="dark" backgroundColor={Colors.background} />
       <AuthProvider>
         <LanguageProvider>
-          <QuranProvider>
-            <HadithProvider>
-              <CalendarProvider>
-                <GestureHandlerRootView style={styles.container}>
-                  <View style={styles.content}>
-                    <RootLayoutNav />
-                    <CustomAlertModal />
-                    <AppUpdateChecker />
-                  </View>
-                </GestureHandlerRootView>
-              </CalendarProvider>
-            </HadithProvider>
-          </QuranProvider>
+          <LocationProvider>
+            <PrimaryMasjidProvider>
+              <QuranProvider>
+                <HadithProvider>
+                  <CalendarProvider>
+                    <GestureHandlerRootView style={styles.container}>
+                      <View style={styles.content}>
+                        <RootLayoutNav />
+                        <CustomAlertModal />
+                        <PrayerAlarmModal />
+                        <AppUpdateChecker />
+                      </View>
+                    </GestureHandlerRootView>
+                  </CalendarProvider>
+                </HadithProvider>
+              </QuranProvider>
+            </PrimaryMasjidProvider>
+          </LocationProvider>
         </LanguageProvider>
       </AuthProvider>
     </ErrorBoundary>
