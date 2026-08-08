@@ -66,6 +66,7 @@ const HadithHeader = React.memo(({ search, setSearch, dailyHadith, recentRead, t
     </View>
   </View>
 ));
+HadithHeader.displayName = 'HadithHeader';
 
 export default function HadithHomeScreen() {
   const { t } = useLanguage();

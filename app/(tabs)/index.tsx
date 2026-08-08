@@ -3,8 +3,10 @@ import { MasjidCard } from "@/components/MasjidCard";
 import { ExploreSkeleton } from "@/components/Skeleton";
 import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+import { VoiceSearchButton } from "@/components/voice-search-button";
 import Colors from "@/constants/colors";
 import { showCustomAlert } from "@/lib/custom-alert";
+import { fuzzyMatch } from "@/lib/fuzzy-search";
 import { useLanguage } from "@/lib/language-context";
 import { useLocation } from "@/lib/location-context";
 import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
@@ -14,8 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { VoiceSearchButton } from "@/components/voice-search-button";
-import { fuzzyMatch } from "@/lib/fuzzy-search";
 import {
   FlatList,
   Platform,
@@ -28,6 +28,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { usePrayerCountdown } from "@/lib/prayer-timer";
+
 function formatTimeCompact(time: string): string {
   if (!time) return "";
   const [h, m] = time.split(":");
@@ -35,6 +37,75 @@ function formatTimeCompact(time: string): string {
   const displayHour = hour % 12 || 12;
   const ampm = hour >= 12 ? "PM" : "AM";
   return `${displayHour}:${m} ${ampm}`;
+}
+
+function PrimaryMasjidCardView({ masjid, onPress }: { masjid: Masjid; onPress: () => void }) {
+  const countdown = usePrayerCountdown(masjid.timetable);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.primaryCard,
+        pressed && styles.primaryCardPressed,
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.primaryCardHeader}>
+        <View style={styles.primaryCardIconWrap}>
+          <Ionicons name="star" size={16} color="#fff" />
+        </View>
+        <View style={styles.primaryCardInfo}>
+          <Text style={styles.primaryCardLabel}>YOUR PRIMARY MASJID</Text>
+          <Text style={styles.primaryCardName} numberOfLines={1}>
+            {masjid.name}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+      </View>
+
+      {countdown.nextPrayerKey && (
+        <View style={styles.primaryCountdownBanner}>
+          <Ionicons name="time-outline" size={14} color={Colors.primary} />
+          <Text style={styles.primaryCountdownText}>
+            Next: <Text style={{ fontFamily: "Poppins_700Bold", color: Colors.primaryDark }}>{countdown.nextPrayerName}</Text> at {countdown.nextPrayerTimeFormatted}{" "}
+            <Text style={{ fontFamily: "Poppins_600SemiBold", color: countdown.isNow ? Colors.error : Colors.accent }}>
+              ({countdown.isNow ? "NOW 🕌" : `in ${countdown.formattedRemaining}`})
+            </Text>
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.primaryCardTimesRow}>
+        {[
+          { key: "fajr", label: "Fajr" },
+          { key: "dhuhr", label: "Dhuhr" },
+          { key: "asr", label: "Asr" },
+          { key: "maghrib", label: "Maghrib" },
+          { key: "isha", label: "Isha" },
+        ].map((item) => {
+          const isNext = countdown.nextPrayerKey === item.key;
+          return (
+            <View
+              key={item.key}
+              style={[
+                styles.primaryCardTimeItem,
+                isNext && styles.primaryCardTimeItemActive,
+              ]}
+            >
+              <Text style={[styles.primaryCardTimeLabel, isNext && styles.primaryCardTimeLabelActive]}>
+                {item.label}
+              </Text>
+              <Text style={[styles.primaryCardTimeValue, isNext && styles.primaryCardTimeValueActive]}>
+                {formatTimeCompact(
+                  masjid.timetable[item.key as keyof typeof masjid.timetable]
+                )}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </Pressable>
+  );
 }
 
 export default function ExploreScreen() {
@@ -168,7 +239,7 @@ export default function ExploreScreen() {
             onPress={() => setSearch("")}
           />
         ) : (
-          <VoiceSearchButton onTranscript={setSearch} size={18} color={Colors.textMuted} />
+          <VoiceSearchButton onTranscript={setSearch} size={22} color={Colors.textMuted} />
         )}
       </View>
       {loading ? (
@@ -209,50 +280,15 @@ export default function ExploreScreen() {
           ListHeaderComponent={
             <View style={{ marginBottom: 8 }}>
               {primaryMasjid && primaryMasjid.timetable ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.primaryCard,
-                    pressed && styles.primaryCardPressed,
-                  ]}
+                <PrimaryMasjidCardView
+                  masjid={primaryMasjid}
                   onPress={() =>
                     router.push({
                       pathname: "/masjid/[id]",
                       params: { id: primaryMasjid.id },
                     })
                   }
-                >
-                  <View style={styles.primaryCardHeader}>
-                    <View style={styles.primaryCardIconWrap}>
-                      <Ionicons name="star" size={16} color="#fff" />
-                    </View>
-                    <View style={styles.primaryCardInfo}>
-                      <Text style={styles.primaryCardLabel}>YOUR PRIMARY MASJID</Text>
-                      <Text style={styles.primaryCardName} numberOfLines={1}>
-                        {primaryMasjid.name}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                  </View>
-
-                  <View style={styles.primaryCardTimesRow}>
-                    {[
-                      { key: "fajr", label: "Fajr" },
-                      { key: "dhuhr", label: "Dhuhr" },
-                      { key: "asr", label: "Asr" },
-                      { key: "maghrib", label: "Maghrib" },
-                      { key: "isha", label: "Isha" },
-                    ].map((item) => (
-                      <View key={item.key} style={styles.primaryCardTimeItem}>
-                        <Text style={styles.primaryCardTimeLabel}>{item.label}</Text>
-                        <Text style={styles.primaryCardTimeValue}>
-                          {formatTimeCompact(
-                            primaryMasjid.timetable[item.key as keyof typeof primaryMasjid.timetable]
-                          )}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </Pressable>
+                />
               ) : null}
 
               {events.length > 0 ? (
@@ -459,6 +495,21 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginTop: -1,
   },
+  primaryCountdownBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.overlay,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 12,
+  },
+  primaryCountdownText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.text,
+  },
   primaryCardTimesRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -466,16 +517,30 @@ const styles = StyleSheet.create({
   primaryCardTimeItem: {
     alignItems: "center",
     gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  primaryCardTimeItemActive: {
+    backgroundColor: Colors.overlay,
   },
   primaryCardTimeLabel: {
     fontFamily: "Poppins_500Medium",
     fontSize: 11,
     color: Colors.textMuted,
   },
+  primaryCardTimeLabelActive: {
+    color: Colors.primary,
+    fontFamily: "Poppins_700Bold",
+  },
   primaryCardTimeValue: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
     color: Colors.primary,
+  },
+  primaryCardTimeValueActive: {
+    color: Colors.primaryDark,
+    fontFamily: "Poppins_700Bold",
   },
   greetingRow: {
     flexDirection: "row",

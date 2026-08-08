@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   Platform,
   TextInput,
+  Switch,
 } from "react-native";
-import { Modal, TouchableOpacity, FlatList } from "react-native";
+import { Modal, TouchableOpacity } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +22,7 @@ import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, g
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 import { useLocation } from "@/lib/location-context";
+import { fetchAppUpdateConfig, saveAppUpdateConfig, AppUpdateConfig } from "@/lib/updates";
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +30,57 @@ export default function AdminScreen() {
   const { locations, selectedCity, refreshLocations } = useLocation();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [masjids, setMasjids] = useState<Masjid[]>([]);
+
+  const [showReleaseModal, setShowReleaseModal] = useState(false);
+  const [releaseLatestVersion, setReleaseLatestVersion] = useState("1.0.0");
+  const [releaseMinVersion, setReleaseMinVersion] = useState("1.0.0");
+  const [releaseNotesText, setReleaseNotesText] = useState("Performance improvements\nGeneral bug fixes");
+  const [releaseEnabled, setReleaseEnabled] = useState(true);
+  const [isSavingRelease, setIsSavingRelease] = useState(false);
+
+  const handleOpenReleaseModal = async () => {
+    try {
+      const config = await fetchAppUpdateConfig();
+      setReleaseLatestVersion(config.latestVersion || "1.0.0");
+      setReleaseMinVersion(config.minVersion || "1.0.0");
+      setReleaseNotesText((config.releaseNotes || []).join("\n"));
+      setReleaseEnabled(config.enabled ?? true);
+      setShowReleaseModal(true);
+    } catch (error) {
+      console.error("Failed to load release config:", error);
+      showCustomAlert("Error", "Could not load release configuration.");
+    }
+  };
+
+  const handleSaveRelease = async () => {
+    if (!releaseLatestVersion.trim() || !releaseMinVersion.trim()) {
+      showCustomAlert("Error", "Please enter valid version numbers.");
+      return;
+    }
+    setIsSavingRelease(true);
+    try {
+      const notes = releaseNotesText.split("\n").map((n) => n.trim()).filter(Boolean);
+      const updatedConfig: AppUpdateConfig = {
+        latestVersion: releaseLatestVersion.trim(),
+        minVersion: releaseMinVersion.trim(),
+        releaseNotes: notes.length > 0 ? notes : ["New features and performance improvements"],
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes",
+        appStoreUrl: "https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes",
+        enabled: releaseEnabled,
+      };
+      await saveAppUpdateConfig(updatedConfig);
+      setShowReleaseModal(false);
+      showCustomAlert(
+        "🚀 Release Published!",
+        `App Update v${updatedConfig.latestVersion} has been saved. All users will now receive the update prompt.`
+      );
+    } catch (error) {
+      console.error("Failed to publish release:", error);
+      showCustomAlert("Error", "Failed to publish app release update.");
+    } finally {
+      setIsSavingRelease(false);
+    }
+  };
   const [loadingMasjid, setLoadingMasjid] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -213,7 +266,7 @@ export default function AdminScreen() {
           </View>
           <Text style={styles.nlTitle}>Masjid Admin</Text>
           <Text style={styles.nlSubtitle}>
-            Login to manage your masjid's prayer timetable
+            Login to manage your masjid&apos;s prayer timetable
           </Text>
           <Pressable
             style={({ pressed }) => [
@@ -405,6 +458,23 @@ export default function AdminScreen() {
                 </View>
                 <Text style={styles.actionTitle}>Feedbacks</Text>
                 <Text style={styles.actionDesc}>Manage app feedback</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  void handleOpenReleaseModal();
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(13, 115, 119, 0.08)" }]}>
+                  <Ionicons name="cloud-upload-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionTitle}>Publish Update</Text>
+                <Text style={styles.actionDesc}>App Store Release</Text>
               </Pressable>
             </View>
 
@@ -756,6 +826,99 @@ export default function AdminScreen() {
                   </View>
                 </View>
               ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Publish App Release Modal */}
+      <Modal
+        visible={showReleaseModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowReleaseModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Publish App Update</Text>
+                <Text style={styles.modalSubtitle}>
+                  Configure the latest Play Store version release for all users.
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowReleaseModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Latest Version Name</Text>
+                <TextInput
+                  style={styles.locInput}
+                  placeholder="e.g. 1.0.1 or 1.1.0"
+                  placeholderTextColor={Colors.textMuted}
+                  value={releaseLatestVersion}
+                  onChangeText={setReleaseLatestVersion}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Minimum Required Version (Forced Update)</Text>
+                <TextInput
+                  style={styles.locInput}
+                  placeholder="e.g. 1.0.0"
+                  placeholderTextColor={Colors.textMuted}
+                  value={releaseMinVersion}
+                  onChangeText={setReleaseMinVersion}
+                  autoCapitalize="none"
+                />
+                <Text style={[styles.modalSubtitle, { marginTop: 4 }]}>
+                  Users on versions below this will be forced to update before using the app.
+                </Text>
+              </View>
+
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Release Notes (1 feature per line)</Text>
+                <TextInput
+                  style={[styles.locInput, { height: 90, paddingTop: 10 }]}
+                  placeholder="Enter release notes..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={releaseNotesText}
+                  onChangeText={setReleaseNotesText}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+
+              <View style={[styles.locFormCard, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.locFormTitle}>Enable In-App Update Prompt</Text>
+                  <Text style={styles.modalSubtitle}>Show update alert to users on app open</Text>
+                </View>
+                <Switch
+                  value={releaseEnabled}
+                  onValueChange={setReleaseEnabled}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginBtn, { marginTop: 12 }, isSavingRelease && styles.btnDisabled]}
+                onPress={handleSaveRelease}
+                disabled={isSavingRelease}
+              >
+                {isSavingRelease ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+                    <Text style={styles.loginBtnText}>Publish & Notify Users</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -1284,6 +1447,11 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_700Bold",
     fontSize: 18,
     color: Colors.primary,
+  },
+  modalSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
   },
   closeBtn: {
     padding: 4,

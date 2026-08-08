@@ -5,14 +5,12 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  Linking,
   BackHandler,
-  Platform,
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { AppUpdateConfig } from "@/lib/updates";
+import { AppUpdateConfig, openPlayStore } from "@/lib/updates";
 import * as Haptics from "expo-haptics";
 
 interface AppUpdateModalProps {
@@ -45,14 +43,7 @@ export default function AppUpdateModal({
   const handleUpdatePress = async () => {
     try {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const url = Platform.OS === "ios" ? config.appStoreUrl : config.playStoreUrl;
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        // Fallback to play store url if custom schemes fail
-        await Linking.openURL(config.playStoreUrl);
-      }
+      await openPlayStore(config.playStoreUrl);
     } catch (err) {
       console.error("[Updates] Failed to redirect to store:", err);
     }
@@ -94,7 +85,7 @@ export default function AppUpdateModal({
           {/* Release Notes */}
           {config.releaseNotes && config.releaseNotes.length > 0 && (
             <View style={styles.notesContainer}>
-              <Text style={styles.notesTitle}>What's New:</Text>
+              <Text style={styles.notesTitle}>What&apos;s New:</Text>
               <ScrollView
                 style={styles.notesScroll}
                 contentContainerStyle={styles.notesContent}

@@ -75,6 +75,12 @@ export default function MasjidFeedbackScreen() {
     );
   };
 
+  const formatDate = (timestamp?: number) => {
+    if (!timestamp) return "";
+    const d = new Date(timestamp);
+    return `${d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
@@ -85,7 +91,22 @@ export default function MasjidFeedbackScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {masjidName ? `${masjidName} Feedbacks` : "Time Feedbacks"}
         </Text>
-        <View style={{ width: 40 }} />
+        {masjidId ? (
+          <Pressable
+            style={styles.headerTimetableBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({
+                pathname: "/edit-timetable",
+                params: { masjidId },
+              });
+            }}
+          >
+            <Ionicons name="time-outline" size={20} color={Colors.primary} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
 
       {loading ? (
@@ -121,6 +142,9 @@ export default function MasjidFeedbackScreen() {
                     <Text style={[styles.typeBadgeText, styles.feedbackTypeText]}>General Feedback</Text>
                   </View>
                 )}
+                {item.createdAt ? (
+                  <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+                ) : null}
               </View>
 
               <View style={styles.cardHeader}>
@@ -139,13 +163,30 @@ export default function MasjidFeedbackScreen() {
                   <Ionicons name="call-outline" size={14} color={Colors.textMuted} />
                   <Text style={styles.emailText}>{item.phone}</Text>
                 </View>
-                <Pressable
-                  style={styles.deleteBtn}
-                  onPress={() => handleDelete(item.id)}
-                >
-                  <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                  <Text style={styles.deleteBtnText}>Delete</Text>
-                </Pressable>
+                <View style={styles.actionRow}>
+                  {(item.masjidId || masjidId) && (
+                    <Pressable
+                      style={styles.editTimetableBtn}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push({
+                          pathname: "/edit-timetable",
+                          params: { masjidId: item.masjidId || masjidId },
+                        });
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={14} color={Colors.primary} />
+                      <Text style={styles.editTimetableBtnText}>Edit Timetable</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={styles.deleteBtn}
+                    onPress={() => handleDelete(item.id)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                    <Text style={styles.deleteBtnText}>Delete</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           )}
@@ -217,9 +258,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
+  headerTimetableBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "rgba(13, 115, 119, 0.08)",
+  },
   typeBadgeContainer: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
+  },
+  dateText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  editTimetableBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(13, 115, 119, 0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(13, 115, 119, 0.18)",
+  },
+  editTimetableBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(192, 57, 43, 0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(192, 57, 43, 0.15)",
+  },
+  deleteBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.error,
   },
   typeBadge: {
     flexDirection: "row",
@@ -293,21 +383,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     flex: 1,
-  },
-  deleteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(192, 57, 43, 0.08)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(192, 57, 43, 0.15)",
-  },
-  deleteBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: Colors.error,
   },
 });

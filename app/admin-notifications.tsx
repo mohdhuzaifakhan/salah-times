@@ -155,15 +155,31 @@ export default function AdminNotificationsScreen() {
               <Text style={styles.bodyText}>{item.body}</Text>
 
               <View style={styles.cardFooter}>
-                <Text style={styles.tapToView}>Tap to view correction list</Text>
+                <Text style={styles.tapToView}>Tap to view feedbacks</Text>
                 <View style={styles.actionRow}>
+                  {item.masjidId && (
+                    <Pressable
+                      style={styles.actionBtn}
+                      onPress={() => {
+                        if (!item.read) void handleMarkRead(item);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push({
+                          pathname: "/edit-timetable",
+                          params: { masjidId: item.masjidId },
+                        });
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                      <Text style={[styles.actionBtnText, { color: Colors.primary }]}>Timetable</Text>
+                    </Pressable>
+                  )}
                   {!item.read && (
                     <Pressable
                       style={styles.actionBtn}
                       onPress={() => handleMarkRead(item)}
                     >
-                      <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} />
-                      <Text style={[styles.actionBtnText, { color: Colors.primary }]}>Mark Read</Text>
+                      <Ionicons name="checkmark-circle-outline" size={18} color={Colors.textSecondary} />
+                      <Text style={[styles.actionBtnText, { color: Colors.textSecondary }]}>Mark Read</Text>
                     </Pressable>
                   )}
                   <Pressable

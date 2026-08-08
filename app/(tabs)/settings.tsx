@@ -5,16 +5,17 @@ import { auth } from '@/lib/firebaseConfig';
 import { useHadith } from '@/lib/hadith/context';
 import { useLanguage } from '@/lib/language-context';
 import { useLocation } from '@/lib/location-context';
+import { triggerPrayerAlarm } from '@/lib/notifications';
 import { usePrimaryMasjid } from '@/lib/primary-masjid-context';
 import { useQuran } from '@/lib/quran/context';
 import { Language } from '@/lib/translations';
-import { compareVersions, CURRENT_VERSION, fetchAppUpdateConfig } from '@/lib/updates';
+import { compareVersions, CURRENT_VERSION, fetchAppUpdateConfig, openPlayStore } from '@/lib/updates';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import React, { useState } from 'react';
-import { ActivityIndicator, Linking, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
@@ -42,8 +43,7 @@ export default function SettingsScreen() {
             {
               text: "Update Now",
               onPress: () => {
-                const url = Platform.OS === 'ios' ? config.appStoreUrl : config.playStoreUrl;
-                Linking.openURL(url).catch(() => Linking.openURL(config.playStoreUrl));
+                void openPlayStore(config.playStoreUrl);
               }
             }
           ]
@@ -124,8 +124,16 @@ export default function SettingsScreen() {
   const handleNotifications = () => {
     showCustomAlert(
       t('notifications'),
-      'Notification settings are currently managed globally. You will receive alerts for all prayer times.',
-      [{ text: 'OK' }]
+      'Prayer alerts & 30s Azaan ringtone are enabled for your primary masjid.',
+      [
+        {
+          text: '🔊 Test Azaan',
+          onPress: () => {
+            void triggerPrayerAlarm('Test Namaaz', primaryMasjid?.name || 'Primary Masjid');
+          },
+        },
+        { text: 'OK', style: 'cancel' },
+      ]
     );
   };
 

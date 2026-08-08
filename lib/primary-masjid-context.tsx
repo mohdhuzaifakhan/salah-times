@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Modal,
   View,
@@ -15,7 +15,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { Masjid } from "./types";
 import { getAllMasjids, getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from "./store";
-import { schedulePrimaryMasjidNotifications } from "./notifications";
+import { schedulePrimaryMasjidNotifications, setupForegroundPrayerWatcher } from "./notifications";
 import { showCustomAlert } from "./custom-alert";
 import { useLocation } from "./location-context";
 
@@ -40,6 +40,9 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [showSelectModal, setShowSelectModal] = useState(false);
   const [masjidSearch, setMasjidSearch] = useState("");
+
+  const primaryMasjidRef = useRef<Masjid | null>(null);
+  primaryMasjidRef.current = primaryMasjid;
 
   const isMandatory = !primaryMasjidId;
 
@@ -66,6 +69,7 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
         if (found) {
           setPrimaryMasjid(found);
           setPrimaryMasjidId(found.id);
+          void schedulePrimaryMasjidNotifications(found);
         } else {
           // Stored ID no longer exists
           setPrimaryMasjid(null);
@@ -87,6 +91,12 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Foreground real-time watcher to trigger Azaan as soon as prayer time arrives while app is open
+  useEffect(() => {
+    const cleanup = setupForegroundPrayerWatcher(() => primaryMasjidRef.current);
+    return () => cleanup();
+  }, []);
 
   // Prevent back button from closing modal when primary masjid is mandatory on Android
   useEffect(() => {

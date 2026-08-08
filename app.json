@@ -19,7 +19,16 @@
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
-      }
+      },
+      "permissions": [
+        "NOTIFICATIONS",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.huzaifa.salahtimes",
@@ -31,6 +40,13 @@
     },
     "plugins": [
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0D7377"
+        }
+      ],
       [
         "react-native-google-mobile-ads",
         {

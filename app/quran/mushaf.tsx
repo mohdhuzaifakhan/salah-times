@@ -273,6 +273,7 @@ const MushafPageItem = React.memo(({
     </View>
   );
 });
+MushafPageItem.displayName = 'MushafPageItem';
 
 export default function MushafScreen() {
   const insets = useSafeAreaInsets();

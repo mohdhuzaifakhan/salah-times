@@ -16,7 +16,7 @@ export const PrayerAlarmModal: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [prayerName, setPrayerName] = useState("Namaaz");
   const [masjidName, setMasjidName] = useState("");
-  const [secondsLeft, setSecondsLeft] = useState(15);
+  const [secondsLeft, setSecondsLeft] = useState(30);
 
   const pulseAnim = useState(() => new Animated.Value(1))[0];
 
@@ -26,7 +26,7 @@ export const PrayerAlarmModal: React.FC = () => {
       if (state.isPlaying) {
         setPrayerName(state.prayerName || "Namaaz");
         setMasjidName(state.masjidName || "");
-        setSecondsLeft(15);
+        setSecondsLeft(30);
       }
     });
 
@@ -88,18 +88,18 @@ export const PrayerAlarmModal: React.FC = () => {
               { transform: [{ scale: pulseAnim }] },
             ]}
           >
-            <Ionicons name="notifications" size={40} color="#FFFFFF" />
+            <Ionicons name="volume-high" size={40} color="#FFFFFF" />
           </Animated.View>
 
-          <Text style={styles.title}>🕌 {prayerName} Alert!</Text>
+          <Text style={styles.title}>🕌 {prayerName} Azaan & Alert!</Text>
           <Text style={styles.subtitle}>
-            10 minutes remaining for {prayerName} namaaz
-            {masjidName ? ` at ${masjidName}` : ""}.
+            Time for {prayerName} namaaz
+            {masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan sound.
           </Text>
 
           <View style={styles.timerBadge}>
             <Ionicons name="time-outline" size={14} color={Colors.primary} />
-            <Text style={styles.timerText}>Ringing ({secondsLeft}s)</Text>
+            <Text style={styles.timerText}>Azaan Playing ({secondsLeft}s)</Text>
           </View>
 
           <TouchableOpacity

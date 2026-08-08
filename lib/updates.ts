@@ -1,6 +1,7 @@
 import { db } from "./firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import Constants from "expo-constants";
+import { Linking, Platform } from "react-native";
 
 // Retrieve CURRENT_VERSION defined in app.json
 export const CURRENT_VERSION = Constants.expoConfig?.version || "1.0.0";
@@ -64,3 +65,44 @@ export async function fetchAppUpdateConfig(): Promise<AppUpdateConfig> {
     return DEFAULT_UPDATE_CONFIG;
   }
 }
+
+/**
+ * Saves the updated app release configuration to Firestore document `/config/app_update`.
+ */
+export async function saveAppUpdateConfig(config: AppUpdateConfig): Promise<void> {
+  try {
+    const docRef = doc(db, "config", "app_update");
+    await setDoc(docRef, config, { merge: true });
+    console.log("[Updates] Successfully saved app update config to Firestore.");
+  } catch (error) {
+    console.error("[Updates] Failed to save app update config to Firestore:", error);
+    throw error;
+  }
+}
+
+/**
+ * Opens Google Play Store (or App Store) directly via market deep link with web URL fallback.
+ */
+export async function openPlayStore(customUrl?: string): Promise<void> {
+  const fallbackUrl = customUrl || DEFAULT_UPDATE_CONFIG.playStoreUrl;
+  
+  if (Platform.OS === "android") {
+    const marketUrl = "market://details?id=com.huzaifa.salahtimes";
+    try {
+      const canOpen = await Linking.canOpenURL(marketUrl);
+      if (canOpen) {
+        await Linking.openURL(marketUrl);
+        return;
+      }
+    } catch (e) {
+      console.warn("[Updates] Failed to open market URL, using fallback:", e);
+    }
+  }
+
+  try {
+    await Linking.openURL(fallbackUrl);
+  } catch (err) {
+    console.error("[Updates] Could not open store URL:", err);
+  }
+}
+

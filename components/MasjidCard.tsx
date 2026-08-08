@@ -5,6 +5,8 @@ import Colors from "@/constants/colors";
 import { Masjid } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
+import { usePrayerCountdown } from "@/lib/prayer-timer";
+
 function formatTime(time: string): string {
   if (!time || !time.includes(":")) return "--:--";
   const [h, m] = time.split(":");
@@ -13,32 +15,6 @@ function formatTime(time: string): string {
   const ampm = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${m} ${ampm}`;
-}
-
-function getNextPrayer(timetable: Masjid["timetable"]): { name: string; time: string } | null {
-  if (!timetable) return null;
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const prayers = [
-    { name: "Fajr", time: timetable.fajr },
-    { name: "Dhuhr", time: timetable.dhuhr },
-    { name: "Asr", time: timetable.asr },
-    { name: "Maghrib", time: timetable.maghrib },
-    { name: "Isha", time: timetable.isha },
-  ].filter(p => !!p.time);
-  
-  if (prayers.length === 0) return null;
-  
-  for (const p of prayers) {
-    const parts = p.time.split(":");
-    if (parts.length === 2) {
-      const [h, m] = parts;
-      if (parseInt(h, 10) * 60 + parseInt(m, 10) > currentMinutes) {
-        return p;
-      }
-    }
-  }
-  return prayers[0];
 }
 
 export function MasjidCard({
@@ -50,7 +26,7 @@ export function MasjidCard({
   onPress: () => void;
   isPrimary?: boolean;
 }) {
-  const next = masjid.timetable ? getNextPrayer(masjid.timetable) : null;
+  const countdown = usePrayerCountdown(masjid.timetable);
 
   return (
     <Pressable
@@ -85,11 +61,17 @@ export function MasjidCard({
         </View>
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
       </View>
-      {next && (
+      {countdown.nextPrayerKey && (
         <View style={styles.nextPrayer}>
           <Text style={styles.nextLabel}>Next</Text>
-          <Text style={styles.nextName}>{next.name}</Text>
-          <Text style={styles.nextTime}>{formatTime(next.time)}</Text>
+          <Text style={styles.nextName}>{countdown.nextPrayerName}</Text>
+          <Text style={styles.nextTime}>{countdown.nextPrayerTimeFormatted}</Text>
+          <View style={styles.countdownBadge}>
+            <Ionicons name="time-outline" size={12} color={Colors.primary} />
+            <Text style={styles.countdownText}>
+              {countdown.isNow ? "NOW 🕌" : `in ${countdown.formattedRemaining}`}
+            </Text>
+          </View>
         </View>
       )}
       {masjid.timetable ? (
@@ -182,7 +164,21 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
     color: Colors.primaryDark,
+  },
+  countdownBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     marginLeft: "auto",
+  },
+  countdownText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
   },
   timesRow: {
     flexDirection: "row",
