@@ -18,6 +18,7 @@ interface AppUpdateModalProps {
   config: AppUpdateConfig;
   isForced: boolean;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
 export default function AppUpdateModal({
@@ -25,6 +26,7 @@ export default function AppUpdateModal({
   config,
   isForced,
   onClose,
+  onUpdate,
 }: AppUpdateModalProps) {
   // Prevent dismissal of forced updates via Android back button
   useEffect(() => {
@@ -44,6 +46,11 @@ export default function AppUpdateModal({
     try {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await openPlayStore(config.playStoreUrl);
+      if (onUpdate) {
+        onUpdate();
+      } else {
+        onClose();
+      }
     } catch (err) {
       console.error("[Updates] Failed to redirect to store:", err);
     }

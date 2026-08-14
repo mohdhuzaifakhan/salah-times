@@ -60,8 +60,12 @@ export async function fetchAppUpdateConfig(): Promise<AppUpdateConfig> {
       await setDoc(docRef, DEFAULT_UPDATE_CONFIG);
       return DEFAULT_UPDATE_CONFIG;
     }
-  } catch (error) {
-    console.error("[Updates] Failed to fetch app update config from Firestore:", error);
+  } catch (error: any) {
+    if (error?.code === "unavailable" || error?.message?.includes("offline")) {
+      console.warn("[Updates] Device offline or Firestore unavailable; skipping update check.");
+    } else {
+      console.warn("[Updates] Unable to fetch update config from Firestore:", error?.message || error);
+    }
     return DEFAULT_UPDATE_CONFIG;
   }
 }

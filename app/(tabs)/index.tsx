@@ -10,13 +10,15 @@ import { fuzzyMatch } from "@/lib/fuzzy-search";
 import { useLanguage } from "@/lib/language-context";
 import { useLocation } from "@/lib/location-context";
 import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
-import { getAllMasjids, getGlobalEvents } from "@/lib/store";
+import { getAllMasjids, getGlobalEvents, getMasjidsPaginated } from "@/lib/store";
 import { AppEvent, Masjid } from "@/lib/types";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
@@ -117,7 +119,10 @@ export default function ExploreScreen() {
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastDocSnap, setLastDocSnap] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const configuredCitiesSet = useMemo(() => {
     const set = new Set<string>();
@@ -127,14 +132,26 @@ export default function ExploreScreen() {
     return set;
   }, [locations]);
 
-  const loadData = useCallback(async () => {
+  const currentCity = selectedCity || "Rampur";
+
+  const loadInitialData = useCallback(async (searchQuery: string = search) => {
     try {
-      const [masjidsData, eventsData] = await Promise.all([
-        getAllMasjids(),
+      setLoading(true);
+      const [paginatedResult, eventsData] = await Promise.all([
+        getMasjidsPaginated({
+          pageSize: 10,
+          lastDoc: null,
+          city: currentCity,
+          searchQuery: searchQuery,
+          configuredCitiesSet,
+        }),
         getGlobalEvents(),
         refreshPrimaryMasjid(),
       ]);
-      setMasjids(masjidsData);
+
+      setMasjids(paginatedResult.masjids);
+      setLastDocSnap(paginatedResult.lastDoc);
+      setHasMore(paginatedResult.hasMore);
       setEvents(eventsData);
     } catch (error) {
       console.error("Failed to load data:", error);
@@ -142,45 +159,70 @@ export default function ExploreScreen() {
     } finally {
       setLoading(false);
     }
-  }, [refreshPrimaryMasjid]);
+  }, [currentCity, configuredCitiesSet, refreshPrimaryMasjid]);
+
+  // Debounced database search effect
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      loadInitialData(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search, currentCity]);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData])
+      loadInitialData(search);
+    }, [loadInitialData])
   );
+
+  const loadMoreMasjids = useCallback(async () => {
+    if (loading || loadingMore || !hasMore || !lastDocSnap) return;
+
+    try {
+      setLoadingMore(true);
+      const result = await getMasjidsPaginated({
+        pageSize: 10,
+        lastDoc: lastDocSnap,
+        city: currentCity,
+        searchQuery: search,
+        configuredCitiesSet,
+      });
+
+      if (result.masjids.length > 0) {
+        setMasjids((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newItems = result.masjids.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...newItems];
+        });
+        setLastDocSnap(result.lastDoc);
+      }
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error("Failed to load more masjids:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, hasMore, lastDocSnap, currentCity, search, configuredCitiesSet]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadInitialData(search);
     setRefreshing(false);
   };
 
-  const currentCity = selectedCity || "Rampur";
-
-  const filtered = masjids.filter((m) => {
-    const combinedInfo = `${m.name} ${m.city} ${m.address || ""}`;
-    const matchesSearch = !search || fuzzyMatch(combinedInfo, search);
-    const matchesCity =
-      currentCity === "Other"
-        ? !m.city || !configuredCitiesSet.has(m.city.trim().toLowerCase())
-        : m.city.trim().toLowerCase() === currentCity.trim().toLowerCase();
-    return matchesSearch && matchesCity;
-  });
-
   const filteredWithAds = useMemo(() => {
     const result: (Masjid | { isAd: true; id: string })[] = [];
-    filtered.forEach((item, index) => {
+    masjids.forEach((item, index) => {
       result.push(item);
-      // Inject native ad after every 9th masjid
       if ((index + 1) % 9 === 0) {
         result.push({ isAd: true, id: `ad-${item.id}` });
       }
     });
     return result;
-  }, [filtered]);
+  }, [masjids]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
@@ -306,6 +348,16 @@ export default function ExploreScreen() {
                 </Text>
               </View>
             </View>
+          }
+          onEndReached={loadMoreMasjids}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.footerText}>Loading more masjids...</Text>
+              </View>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -696,5 +748,17 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: "#ffffff",
+  },
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  footerText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });

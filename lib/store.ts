@@ -11,7 +11,11 @@ import {
   query,
   where,
   limit,
-  arrayUnion
+  arrayUnion,
+  orderBy,
+  startAfter,
+  QueryDocumentSnapshot,
+  QueryConstraint
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -20,7 +24,113 @@ const USERS_COLLECTION = "users";
 const EVENTS_COLLECTION = "events";
 const LOCATIONS_COLLECTION = "locations";
 
+export interface PaginatedMasjidsResult {
+  masjids: Masjid[];
+  lastDoc: QueryDocumentSnapshot | null;
+  hasMore: boolean;
+}
+
+export async function getMasjidsPaginated({
+  pageSize = 10,
+  lastDoc = null,
+  city = null,
+  searchQuery = "",
+  configuredCitiesSet,
+}: {
+  pageSize?: number;
+  lastDoc?: QueryDocumentSnapshot | null;
+  city?: string | null;
+  searchQuery?: string;
+  configuredCitiesSet?: Set<string>;
+}): Promise<PaginatedMasjidsResult> {
+  try {
+    const masjidsRef = collection(db, MASJIDS_COLLECTION);
+    const accumulatedMasjids: Masjid[] = [];
+    let currentLastDoc: QueryDocumentSnapshot | null = lastDoc;
+    let hasMoreDocsInDb = true;
+
+    const cleanSearch = searchQuery.trim().toLowerCase();
+    const cleanCity = city ? city.trim().toLowerCase() : null;
+
+    while (accumulatedMasjids.length < pageSize && hasMoreDocsInDb) {
+      const constraints: QueryConstraint[] = [];
+      constraints.push(orderBy("name"));
+
+      if (currentLastDoc) {
+        constraints.push(startAfter(currentLastDoc));
+      }
+
+      const fetchBatchSize = Math.max(pageSize * 2, 20);
+      constraints.push(limit(fetchBatchSize));
+
+      let querySnapshot;
+      try {
+        const q = query(masjidsRef, ...constraints);
+        querySnapshot = await getDocs(q);
+      } catch (err) {
+        const fallbackConstraints: QueryConstraint[] = [];
+        if (currentLastDoc) fallbackConstraints.push(startAfter(currentLastDoc));
+        fallbackConstraints.push(limit(fetchBatchSize));
+        const q = query(masjidsRef, ...fallbackConstraints);
+        querySnapshot = await getDocs(q);
+      }
+
+      const docs = querySnapshot.docs;
+      if (docs.length < fetchBatchSize) {
+        hasMoreDocsInDb = false;
+      }
+
+      if (docs.length === 0) {
+        break;
+      }
+
+      currentLastDoc = docs[docs.length - 1];
+
+      for (const docSnap of docs) {
+        const masjid = docSnap.data() as Masjid;
+        
+        let matchesCity = true;
+        if (cleanCity && cleanCity !== "all") {
+          const mCity = masjid.city ? masjid.city.trim().toLowerCase() : "";
+          if (cleanCity === "other") {
+            matchesCity = !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
+          } else {
+            matchesCity = mCity === cleanCity;
+          }
+        }
+
+        let matchesSearch = true;
+        if (cleanSearch) {
+          const combined = `${masjid.name} ${masjid.city || ""} ${masjid.address || ""}`.toLowerCase();
+          matchesSearch = combined.includes(cleanSearch);
+        }
+
+        if (matchesCity && matchesSearch) {
+          accumulatedMasjids.push(masjid);
+          if (accumulatedMasjids.length === pageSize) {
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      masjids: accumulatedMasjids,
+      lastDoc: currentLastDoc,
+      hasMore: hasMoreDocsInDb,
+    };
+  } catch (error) {
+    console.error("Error getting paginated masjids:", error);
+    return {
+      masjids: [],
+      lastDoc: null,
+      hasMore: false,
+    };
+  }
+}
+
 export async function getAllMasjids(): Promise<Masjid[]> {
+
   try {
     const querySnapshot = await getDocs(collection(db, MASJIDS_COLLECTION));
     const masjids: Masjid[] = [];
@@ -35,17 +145,32 @@ export async function getAllMasjids(): Promise<Masjid[]> {
 }
 
 export async function getMasjidById(id: string): Promise<Masjid | null> {
+  const cacheKey = `@masjid_cache_${id}`;
   try {
     const docRef = doc(db, MASJIDS_COLLECTION, id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as Masjid;
+    const fetchPromise = getDoc(docRef);
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+    
+    const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
+    if (docSnap && docSnap.exists()) {
+      const data = docSnap.data() as Masjid;
+      void AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+      return data;
     }
-    return null;
   } catch (error) {
-    console.error("Error getting masjid:", error);
-    return null;
+    console.error("Error getting masjid from Firestore, trying local cache:", error);
   }
+
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as Masjid;
+    }
+  } catch (cacheErr) {
+    console.error("Error reading cached masjid:", cacheErr);
+  }
+
+  return null;
 }
 
 export async function getMasjidByAdminUid(adminUid: string): Promise<Masjid | null> {
@@ -300,6 +425,23 @@ export async function deleteEvent(id: string): Promise<boolean> {
   }
 }
 
+export async function updateEvent(
+  id: string,
+  data: Partial<Omit<AppEvent, "id" | "createdAt">>
+): Promise<boolean> {
+  try {
+    const eventRef = doc(db, EVENTS_COLLECTION, id);
+    const cleanedData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    await updateDoc(eventRef, cleanedData);
+    return true;
+  } catch (error) {
+    console.error("Error updating event:", error);
+    throw error;
+  }
+}
+
 export async function getEventById(id: string): Promise<AppEvent | null> {
   try {
     const docRef = doc(db, EVENTS_COLLECTION, id);
@@ -315,6 +457,7 @@ export async function getEventById(id: string): Promise<AppEvent | null> {
 }
 
 const PRIMARY_MASJID_KEY = "@primary_masjid_id";
+const PRIMARY_MASJID_DATA_KEY = "@primary_masjid_data";
 
 export async function getPrimaryMasjidId(): Promise<string | null> {
   try {
@@ -325,12 +468,28 @@ export async function getPrimaryMasjidId(): Promise<string | null> {
   }
 }
 
-export async function savePrimaryMasjidId(id: string | null): Promise<void> {
+export async function getCachedPrimaryMasjid(): Promise<Masjid | null> {
+  try {
+    const cached = await AsyncStorage.getItem(PRIMARY_MASJID_DATA_KEY);
+    if (cached) {
+      return JSON.parse(cached) as Masjid;
+    }
+  } catch (error) {
+    console.error("Error reading cached primary masjid data:", error);
+  }
+  return null;
+}
+
+export async function savePrimaryMasjidId(id: string | null, masjidData?: Masjid | null): Promise<void> {
   try {
     if (id) {
       await AsyncStorage.setItem(PRIMARY_MASJID_KEY, id);
+      if (masjidData) {
+        await AsyncStorage.setItem(PRIMARY_MASJID_DATA_KEY, JSON.stringify(masjidData));
+      }
     } else {
       await AsyncStorage.removeItem(PRIMARY_MASJID_KEY);
+      await AsyncStorage.removeItem(PRIMARY_MASJID_DATA_KEY);
     }
   } catch (error) {
     console.error("Error saving primary masjid id:", error);
@@ -532,25 +691,44 @@ const DEFAULT_LOCATIONS: LocationState[] = [
   },
 ];
 
+const LOCATIONS_CACHE_KEY = "@locations_cache";
+
 export async function getLocations(): Promise<LocationState[]> {
   try {
-    const querySnapshot = await getDocs(collection(db, LOCATIONS_COLLECTION));
-    if (querySnapshot.empty) {
-      // Seed default locations into Firestore
-      for (const loc of DEFAULT_LOCATIONS) {
-        await setDoc(doc(db, LOCATIONS_COLLECTION, loc.id), loc);
+    const fetchPromise = getDocs(collection(db, LOCATIONS_COLLECTION));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+
+    const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
+    if (querySnapshot) {
+      if (querySnapshot.empty) {
+        for (const loc of DEFAULT_LOCATIONS) {
+          await setDoc(doc(db, LOCATIONS_COLLECTION, loc.id), loc);
+        }
+        void AsyncStorage.setItem(LOCATIONS_CACHE_KEY, JSON.stringify(DEFAULT_LOCATIONS));
+        return DEFAULT_LOCATIONS;
       }
-      return DEFAULT_LOCATIONS;
+      const locations: LocationState[] = [];
+      querySnapshot.forEach((docSnap) => {
+        locations.push(docSnap.data() as LocationState);
+      });
+      const sorted = locations.sort((a, b) => a.state.localeCompare(b.state));
+      void AsyncStorage.setItem(LOCATIONS_CACHE_KEY, JSON.stringify(sorted));
+      return sorted;
     }
-    const locations: LocationState[] = [];
-    querySnapshot.forEach((docSnap) => {
-      locations.push(docSnap.data() as LocationState);
-    });
-    return locations.sort((a, b) => a.state.localeCompare(b.state));
   } catch (error) {
-    console.error("Error getting locations:", error);
-    return DEFAULT_LOCATIONS;
+    console.error("Error getting locations from Firestore, trying local cache:", error);
   }
+
+  try {
+    const cached = await AsyncStorage.getItem(LOCATIONS_CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached) as LocationState[];
+    }
+  } catch (cacheErr) {
+    console.error("Error reading cached locations:", cacheErr);
+  }
+
+  return DEFAULT_LOCATIONS;
 }
 
 export async function addState(stateName: string): Promise<LocationState> {

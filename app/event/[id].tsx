@@ -20,6 +20,7 @@ import Colors from "@/constants/colors";
 import { useLanguage } from "@/lib/language-context";
 import { getEventById, getMasjidById } from "@/lib/store";
 import { AppEvent, Masjid } from "@/lib/types";
+import { ImageViewerModal } from "@/components/ImageViewerModal";
 
 export default function EventDetailScreen() {
   const { t } = useLanguage();
@@ -29,6 +30,7 @@ export default function EventDetailScreen() {
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMasjid, setLoadingMasjid] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -160,9 +162,19 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {event.imageUrl ? (
-          <View style={styles.bannerContainer}>
+          <Pressable
+            style={styles.bannerContainer}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setViewerVisible(true);
+            }}
+          >
             <Image source={{ uri: event.imageUrl }} style={styles.bannerImage} />
-          </View>
+            <View style={styles.zoomBadge}>
+              <Ionicons name="expand-outline" size={14} color="#fff" />
+              <Text style={styles.zoomBadgeText}>Tap to Zoom Full</Text>
+            </View>
+          </Pressable>
         ) : (
           <View style={styles.placeholderBanner}>
             <View style={styles.placeholderIconWrap}>
@@ -266,6 +278,13 @@ export default function EventDetailScreen() {
           <Text style={styles.shareButtonText}>Share Event Details</Text>
         </Pressable>
       </ScrollView>
+
+      <ImageViewerModal
+        visible={viewerVisible}
+        imageUrl={event ? event.imageUrl || null : null}
+        onClose={() => setViewerVisible(false)}
+        title={event ? event.title : undefined}
+      />
     </View>
   );
 }
@@ -308,17 +327,36 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     width: "100%",
-    height: 200,
+    height: 240,
     borderRadius: 20,
     overflow: "hidden",
     marginBottom: 20,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    backgroundColor: "#12161A",
+    position: "relative",
   },
   bannerImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    resizeMode: "contain",
+  },
+  zoomBadge: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  zoomBadgeText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: "#ffffff",
   },
   placeholderBanner: {
     width: "100%",

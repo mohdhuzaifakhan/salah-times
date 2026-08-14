@@ -13,8 +13,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import { Masjid } from "./types";
-import { getAllMasjids, getPrimaryMasjidId, getMasjidById, savePrimaryMasjidId } from "./store";
+import { getAllMasjids, getPrimaryMasjidId, getCachedPrimaryMasjid, getMasjidById, savePrimaryMasjidId, getMasjidsPaginated } from "./store";
 import { schedulePrimaryMasjidNotifications, setupForegroundPrayerWatcher } from "./notifications";
 import { showCustomAlert } from "./custom-alert";
 import { useLocation } from "./location-context";
@@ -35,6 +36,10 @@ const PrimaryMasjidContext = createContext<PrimaryMasjidContextType | undefined>
 export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { selectedCity, locations, openLocationModal, selectLocation } = useLocation();
   const [masjids, setMasjids] = useState<Masjid[]>([]);
+  const [modalMasjids, setModalMasjids] = useState<Masjid[]>([]);
+  const [modalLastDocSnap, setModalLastDocSnap] = useState<QueryDocumentSnapshot | null>(null);
+  const [modalHasMore, setModalHasMore] = useState(true);
+  const [modalLoadingMore, setModalLoadingMore] = useState(false);
   const [primaryMasjid, setPrimaryMasjid] = useState<Masjid | null>(null);
   const [primaryMasjidId, setPrimaryMasjidId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,27 +59,80 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
     return set;
   }, [locations]);
 
+  const currentCity = selectedCity || "Rampur";
+
+  const loadModalInitialData = useCallback(async (searchQuery: string = masjidSearch) => {
+    try {
+      const res = await getMasjidsPaginated({
+        pageSize: 10,
+        lastDoc: null,
+        city: currentCity,
+        searchQuery,
+        configuredCitiesSet,
+      });
+      setModalMasjids(res.masjids);
+      setModalLastDocSnap(res.lastDoc);
+      setModalHasMore(res.hasMore);
+    } catch (err) {
+      console.error("Error loading modal masjids:", err);
+    }
+  }, [currentCity, configuredCitiesSet]);
+
+  useEffect(() => {
+    if (showSelectModal) {
+      const handler = setTimeout(() => {
+        loadModalInitialData(masjidSearch);
+      }, 300);
+      return () => clearTimeout(handler);
+    }
+  }, [masjidSearch, currentCity, showSelectModal]);
+
+  const loadMoreModalMasjids = useCallback(async () => {
+    if (modalLoadingMore || !modalHasMore || !modalLastDocSnap) return;
+
+    try {
+      setModalLoadingMore(true);
+      const res = await getMasjidsPaginated({
+        pageSize: 10,
+        lastDoc: modalLastDocSnap,
+        city: currentCity,
+        searchQuery: masjidSearch,
+        configuredCitiesSet,
+      });
+
+      if (res.masjids.length > 0) {
+        setModalMasjids((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newItems = res.masjids.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...newItems];
+        });
+        setModalLastDocSnap(res.lastDoc);
+      }
+      setModalHasMore(res.hasMore);
+    } catch (err) {
+      console.error("Error loading more modal masjids:", err);
+    } finally {
+      setModalLoadingMore(false);
+    }
+  }, [modalLoadingMore, modalHasMore, modalLastDocSnap, currentCity, masjidSearch, configuredCitiesSet]);
+
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [allMasjids, storedPrimaryId] = await Promise.all([
-        getAllMasjids(),
-        getPrimaryMasjidId(),
-      ]);
-
-      setMasjids(allMasjids);
+      const storedPrimaryId = await getPrimaryMasjidId();
 
       if (storedPrimaryId) {
-        const found = allMasjids.find((m) => m.id === storedPrimaryId) || (await getMasjidById(storedPrimaryId));
+        let found = await getMasjidById(storedPrimaryId);
+        if (!found) {
+          found = await getCachedPrimaryMasjid();
+        }
+
         if (found) {
           setPrimaryMasjid(found);
           setPrimaryMasjidId(found.id);
           void schedulePrimaryMasjidNotifications(found);
         } else {
-          // Stored ID no longer exists
-          setPrimaryMasjid(null);
-          setPrimaryMasjidId(null);
-          setShowSelectModal(true);
+          setPrimaryMasjidId(storedPrimaryId);
         }
       } else {
         setPrimaryMasjid(null);
@@ -109,13 +167,15 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
   const selectPrimaryMasjid = async (masjidId: string) => {
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await savePrimaryMasjidId(masjidId);
       setPrimaryMasjidId(masjidId);
       
-      const selected = masjids.find((m) => m.id === masjidId) || (await getMasjidById(masjidId));
+      const selected = modalMasjids.find((m) => m.id === masjidId) || (await getMasjidById(masjidId));
       if (selected) {
         setPrimaryMasjid(selected);
+        await savePrimaryMasjidId(masjidId, selected);
         await schedulePrimaryMasjidNotifications(selected);
+      } else {
+        await savePrimaryMasjidId(masjidId);
       }
       setShowSelectModal(false);
       setMasjidSearch("");
@@ -127,6 +187,7 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const openSelectModal = () => {
     setMasjidSearch("");
+    loadModalInitialData("");
     setShowSelectModal(true);
   };
 
@@ -136,8 +197,6 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
       setMasjidSearch("");
     }
   };
-
-  const currentCity = selectedCity || "Rampur";
 
   const filteredMasjids = useMemo(() => {
     const cityMasjids = masjids.filter((m) =>
@@ -217,10 +276,19 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
             </View>
 
             <FlatList
-              data={filteredMasjids}
+              data={modalMasjids}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 30 }}
+              onEndReached={loadMoreModalMasjids}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                modalLoadingMore ? (
+                  <View style={{ paddingVertical: 14, alignItems: "center" }}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  </View>
+                ) : null
+              }
               renderItem={({ item }) => {
                 const isCurrent = item.id === primaryMasjidId;
                 return (

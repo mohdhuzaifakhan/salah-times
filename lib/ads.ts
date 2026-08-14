@@ -1,20 +1,35 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
 /**
  * Checks if react-native-google-mobile-ads's native module exists in the current runtime.
  * Works seamlessly across both Old Architecture & New Architecture (TurboModules) in native builds,
- * while safely returning false in Expo Go or Web environments.
+ * while safely returning false in Expo Go or Web environments without throwing TurboModule errors.
  */
 export const isAdmobSupported = (): boolean => {
   if (Platform.OS === 'web') return false;
+  
+  // Expo Go sandbox environment lacks custom native C++/Java TurboModules
+  if (
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    (Constants as any).appOwnership === 'expo'
+  ) {
+    return false;
+  }
+
+  // Verify native module existence before attempting require()
+  const hasNativeModule =
+    !!NativeModules.RNGoogleMobileAdsModule ||
+    !!NativeModules.RNGoogleMobileAds ||
+    typeof (global as any).__turboModuleProxy === 'function' && !!(global as any).__turboModuleProxy('RNGoogleMobileAdsModule');
+
+  if (!hasNativeModule) {
+    return false;
+  }
+
   try {
     const googleMobileAds = require('react-native-google-mobile-ads');
-    return !!(
-      googleMobileAds?.default ||
-      googleMobileAds?.BannerAd ||
-      NativeModules.RNGoogleMobileAdsModule ||
-      NativeModules.RNGoogleMobileAds
-    );
+    return !!(googleMobileAds?.default || googleMobileAds?.BannerAd);
   } catch (error) {
     return false;
   }
@@ -64,10 +79,10 @@ export {
 export const AD_UNIT_IDS = {
   BANNER: __DEV__
     ? (TestIds?.BANNER || (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111'))
-    : (process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || TestIds?.BANNER || 'ca-app-pub-3940256099942544/6300978111'),
+    : (process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 'ca-app-pub-5245535500553548/9573868181'),
   NATIVE: __DEV__
     ? (TestIds?.NATIVE || (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/3986624511' : 'ca-app-pub-3940256099942544/2247696110'))
-    : (process.env.EXPO_PUBLIC_ADMOB_NATIVE_ID || TestIds?.NATIVE || 'ca-app-pub-3940256099942544/2247696110'),
+    : (process.env.EXPO_PUBLIC_ADMOB_NATIVE_ID || 'ca-app-pub-5245535500553548/7578260233'),
 };
 
 /**

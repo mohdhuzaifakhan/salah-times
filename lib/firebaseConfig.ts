@@ -1,8 +1,14 @@
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApp, getApps, setLogLevel } from "firebase/app";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+} from "firebase/firestore";
 import { initializeAuth, getAuth } from "firebase/auth";
 import * as FirebaseAuth from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 function requiredEnv(
   name: string,
@@ -53,6 +59,14 @@ try {
   auth = getAuth(app);
 }
 
-const db = getFirestore(app);
+// Silence verbose internal Firebase warnings during offline / reconnect attempts
+setLogLevel("error");
+
+const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  ...(Platform.OS === "web"
+    ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }
+    : { localCache: memoryLocalCache() }),
+});
 
 export { app, auth, db };

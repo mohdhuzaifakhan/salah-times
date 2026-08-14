@@ -73,6 +73,18 @@ export default function AppUpdateChecker() {
     setModalVisible(false);
   };
 
+  const handleUpdatePress = async () => {
+    if (updateConfig && !isForced) {
+      try {
+        // Remember that user acknowledged update for this version so optional modal doesn't reappear immediately
+        await AsyncStorage.setItem(SKIPPED_VERSION_KEY, updateConfig.latestVersion);
+      } catch (err) {
+        console.error("[Updates] Failed to save update version to AsyncStorage:", err);
+      }
+    }
+    setModalVisible(false);
+  };
+
   if (!updateConfig) return null;
 
   return (
@@ -81,6 +93,7 @@ export default function AppUpdateChecker() {
       config={updateConfig}
       isForced={isForced}
       onClose={handleCloseModal}
+      onUpdate={handleUpdatePress}
     />
   );
 }

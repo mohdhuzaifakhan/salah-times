@@ -91,10 +91,10 @@ export const PrayerAlarmModal: React.FC = () => {
             <Ionicons name="volume-high" size={40} color="#FFFFFF" />
           </Animated.View>
 
-          <Text style={styles.title}>🕌 {prayerName} Azaan & Alert!</Text>
+          <Text style={styles.title}>🕌 {prayerName} Alarm - 10 Mins Left</Text>
           <Text style={styles.subtitle}>
-            Time for {prayerName} namaaz
-            {masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan sound.
+            10 minutes before {prayerName} namaaz
+            {masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan ringtone.
           </Text>
 
           <View style={styles.timerBadge}>
