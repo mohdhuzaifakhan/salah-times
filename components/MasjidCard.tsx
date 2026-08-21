@@ -69,27 +69,35 @@ export function MasjidCard({
           <View style={styles.countdownBadge}>
             <Ionicons name="time-outline" size={12} color={Colors.primary} />
             <Text style={styles.countdownText}>
-              {countdown.isNow ? "NOW 🕌" : `in ${countdown.formattedRemaining}`}
+              {countdown.isNow ? "NOW" : `in ${countdown.formattedRemaining}`}
             </Text>
           </View>
         </View>
       )}
-      {masjid.timetable ? (
-        <View style={styles.timesRow}>
-          {[
-            { label: "F", time: masjid.timetable.fajr },
-            { label: "D", time: masjid.timetable.dhuhr },
-            { label: "A", time: masjid.timetable.asr },
-            { label: "M", time: masjid.timetable.maghrib },
-            { label: "I", time: masjid.timetable.isha },
-          ].map((item) => (
-            <View key={item.label} style={styles.timeItem}>
-              <Text style={styles.timeLabel}>{item.label}</Text>
-              <Text style={styles.timeValue}>{item.time ? formatTime(item.time) : "--:--"}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {masjid.timetable ? (() => {
+        const isFriday = new Date().getDay() === 5;
+        const dhuhrLabel = isFriday ? "J" : "D";
+        const dhuhrTime = isFriday
+          ? (masjid.timetable.jummah || masjid.timetable.dhuhr)
+          : masjid.timetable.dhuhr;
+
+        return (
+          <View style={styles.timesRow}>
+            {[
+              { label: "F", time: masjid.timetable.fajr },
+              { label: dhuhrLabel, time: dhuhrTime },
+              { label: "A", time: masjid.timetable.asr },
+              { label: "M", time: masjid.timetable.maghrib },
+              { label: "I", time: masjid.timetable.isha },
+            ].map((item) => (
+              <View key={item.label} style={styles.timeItem}>
+                <Text style={styles.timeLabel}>{item.label}</Text>
+                <Text style={styles.timeValue}>{item.time ? formatTime(item.time) : "--:--"}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })() : null}
     </Pressable>
   );
 }

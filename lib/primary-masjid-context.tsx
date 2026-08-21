@@ -137,6 +137,7 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setPrimaryMasjid(null);
         setPrimaryMasjidId(null);
+        await loadModalInitialData("");
         setShowSelectModal(true);
       }
     } catch (error) {
@@ -144,7 +145,7 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadModalInitialData]);
 
   useEffect(() => {
     loadData();
@@ -155,14 +156,6 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
     const cleanup = setupForegroundPrayerWatcher(() => primaryMasjidRef.current);
     return () => cleanup();
   }, []);
-
-  // Prevent back button from closing modal when primary masjid is mandatory on Android
-  useEffect(() => {
-    if (showSelectModal && isMandatory) {
-      const backHandler = BackHandler.addEventListener("hardwareBackPress", () => true);
-      return () => backHandler.remove();
-    }
-  }, [showSelectModal, isMandatory]);
 
   const selectPrimaryMasjid = async (masjidId: string) => {
     try {
@@ -192,10 +185,8 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const closeSelectModal = () => {
-    if (!isMandatory) {
-      setShowSelectModal(false);
-      setMasjidSearch("");
-    }
+    setShowSelectModal(false);
+    setMasjidSearch("");
   };
 
   const filteredMasjids = useMemo(() => {
@@ -233,11 +224,7 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
         visible={showSelectModal && !isLoading && !!selectedCity}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => {
-          if (!isMandatory) {
-            closeSelectModal();
-          }
-        }}
+        onRequestClose={closeSelectModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -252,11 +239,9 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
                   </Text>
                 )}
               </View>
-              {!isMandatory && (
-                <TouchableOpacity onPress={closeSelectModal} style={styles.closeBtn}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={closeSelectModal} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.modalSearchBox}>

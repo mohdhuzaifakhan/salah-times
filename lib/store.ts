@@ -30,6 +30,8 @@ export interface PaginatedMasjidsResult {
   hasMore: boolean;
 }
 
+const ALL_MASJIDS_CACHE_KEY = "@all_masjids_cache";
+
 export async function getMasjidsPaginated({
   pageSize = 10,
   lastDoc = null,
@@ -52,7 +54,11 @@ export async function getMasjidsPaginated({
     const cleanSearch = searchQuery.trim().toLowerCase();
     const cleanCity = city ? city.trim().toLowerCase() : null;
 
-    while (accumulatedMasjids.length < pageSize && hasMoreDocsInDb) {
+    let iterations = 0;
+    const maxIterations = 3;
+
+    while (accumulatedMasjids.length < pageSize && hasMoreDocsInDb && iterations < maxIterations) {
+      iterations++;
       const constraints: QueryConstraint[] = [];
       constraints.push(orderBy("name"));
 
@@ -60,19 +66,27 @@ export async function getMasjidsPaginated({
         constraints.push(startAfter(currentLastDoc));
       }
 
-      const fetchBatchSize = Math.max(pageSize * 2, 20);
+      const fetchBatchSize = Math.max(pageSize * 3, 30);
       constraints.push(limit(fetchBatchSize));
 
-      let querySnapshot;
+      let querySnapshot: any = null;
       try {
         const q = query(masjidsRef, ...constraints);
-        querySnapshot = await getDocs(q);
+        const fetchPromise = getDocs(q);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+        querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
       } catch (err) {
         const fallbackConstraints: QueryConstraint[] = [];
         if (currentLastDoc) fallbackConstraints.push(startAfter(currentLastDoc));
         fallbackConstraints.push(limit(fetchBatchSize));
         const q = query(masjidsRef, ...fallbackConstraints);
-        querySnapshot = await getDocs(q);
+        const fetchPromise = getDocs(q);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+        querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
+      }
+
+      if (!querySnapshot) {
+        break;
       }
 
       const docs = querySnapshot.docs;
@@ -114,34 +128,89 @@ export async function getMasjidsPaginated({
       }
     }
 
-    return {
-      masjids: accumulatedMasjids,
-      lastDoc: currentLastDoc,
-      hasMore: hasMoreDocsInDb,
-    };
+    if (accumulatedMasjids.length > 0) {
+      void getAllMasjids();
+      return {
+        masjids: accumulatedMasjids,
+        lastDoc: currentLastDoc,
+        hasMore: hasMoreDocsInDb,
+      };
+    }
   } catch (error) {
-    console.error("Error getting paginated masjids:", error);
-    return {
-      masjids: [],
-      lastDoc: null,
-      hasMore: false,
-    };
+    console.error("Error getting paginated masjids, trying local cache:", error);
   }
+
+  try {
+    const cached = await AsyncStorage.getItem(ALL_MASJIDS_CACHE_KEY);
+    if (cached) {
+      const allCached: Masjid[] = JSON.parse(cached);
+      const cleanSearch = searchQuery.trim().toLowerCase();
+      const cleanCity = city ? city.trim().toLowerCase() : null;
+
+      const filtered = allCached.filter((masjid) => {
+        let matchesCity = true;
+        if (cleanCity && cleanCity !== "all") {
+          const mCity = masjid.city ? masjid.city.trim().toLowerCase() : "";
+          if (cleanCity === "other") {
+            matchesCity = !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
+          } else {
+            matchesCity = mCity === cleanCity;
+          }
+        }
+        let matchesSearch = true;
+        if (cleanSearch) {
+          const combined = `${masjid.name} ${masjid.city || ""} ${masjid.address || ""}`.toLowerCase();
+          matchesSearch = combined.includes(cleanSearch);
+        }
+        return matchesCity && matchesSearch;
+      });
+
+      return {
+        masjids: filtered.slice(0, pageSize),
+        lastDoc: null,
+        hasMore: false,
+      };
+    }
+  } catch (cacheErr) {
+    console.error("Error reading cached masjids fallback:", cacheErr);
+  }
+
+  return {
+    masjids: [],
+    lastDoc: null,
+    hasMore: false,
+  };
 }
 
 export async function getAllMasjids(): Promise<Masjid[]> {
+  try {
+    const fetchPromise = getDocs(collection(db, MASJIDS_COLLECTION));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+    const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (querySnapshot) {
+      const masjids: Masjid[] = [];
+      querySnapshot.forEach((doc) => {
+        masjids.push(doc.data() as Masjid);
+      });
+      const sorted = masjids.sort((a, b) => a.name.localeCompare(b.name));
+      void AsyncStorage.setItem(ALL_MASJIDS_CACHE_KEY, JSON.stringify(sorted));
+      return sorted;
+    }
+  } catch (error) {
+    console.error("Error getting masjids from Firestore, trying local cache:", error);
+  }
 
   try {
-    const querySnapshot = await getDocs(collection(db, MASJIDS_COLLECTION));
-    const masjids: Masjid[] = [];
-    querySnapshot.forEach((doc) => {
-      masjids.push(doc.data() as Masjid);
-    });
-    return masjids.sort((a, b) => a.name.localeCompare(b.name));
-  } catch (error) {
-    console.error("Error getting masjids:", error);
-    return [];
+    const cached = await AsyncStorage.getItem(ALL_MASJIDS_CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached) as Masjid[];
+    }
+  } catch (cacheErr) {
+    console.error("Error reading cached masjids:", cacheErr);
   }
+
+  return [];
 }
 
 export async function getMasjidById(id: string): Promise<Masjid | null> {

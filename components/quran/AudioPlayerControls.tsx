@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface AudioPlayerControlsProps {
@@ -34,21 +34,23 @@ const AudioPlayerControls: React.FC<AudioPlayerControlsProps> = ({
       <View style={styles.controls}>
         {onPrev && (
           <TouchableOpacity onPress={onPrev} style={styles.button}>
-            <Ionicons name="play-skip-back" size={24} color={Colors.primary} />
+            <SkipBack size={24} color={Colors.primary} />
           </TouchableOpacity>
         )}
 
         <TouchableOpacity onPress={onToggle} style={styles.playButton}>
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#FFFFFF" />
+          ) : isPlaying ? (
+            <Pause size={28} color="#FFFFFF" fill="#FFFFFF" />
           ) : (
-            <Ionicons name={isPlaying ? "pause" : "play"} size={32} color="#fff" />
+            <Play size={28} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
           )}
         </TouchableOpacity>
 
         {onNext && (
           <TouchableOpacity onPress={onNext} style={styles.button}>
-            <Ionicons name="play-skip-forward" size={24} color={Colors.primary} />
+            <SkipForward size={24} color={Colors.primary} />
           </TouchableOpacity>
         )}
       </View>

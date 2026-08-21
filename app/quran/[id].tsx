@@ -1,38 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
-  Platform
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/colors';
-import { fetchSurahDetail, SurahDetail, getAudioUrl, fetchQuranPage } from '@/lib/quran/api';
-import { SURA_START_PAGES } from '@/lib/quran/constants';
-import { addBookmark, removeBookmark, updateRecentRead } from '@/lib/quran/db';
-import { useQuran } from '@/lib/quran/context';
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
-import AyahItem from '@/components/quran/AyahItem';
 import AudioPlayerControls from '@/components/quran/AudioPlayerControls';
-
-const { width } = Dimensions.get('window');
+import AyahItem from '@/components/quran/AyahItem';
+import Colors from '@/constants/colors';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { fetchQuranPage, getAudioUrl, SurahDetail } from '@/lib/quran/api';
+import { SURA_START_PAGES } from '@/lib/quran/constants';
+import { useQuran } from '@/lib/quran/context';
+import { addBookmark, removeBookmark } from '@/lib/quran/db';
+import { router, useLocalSearchParams } from 'expo-router';
+import {
+  ArrowLeft,
+  Play,
+  Search,
+  Type,
+  X
+} from 'lucide-react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SurahDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const [surah, setSurah] = useState<SurahDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bgLoading, setBgLoading] = useState(false);
-  const [loadedPages, setLoadedPages] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const { bookmarks, refreshBookmarks, preferences } = useQuran();
+  const [verseSearch, setVerseSearch] = useState('');
+  const { bookmarks, preferences, updatePreferences } = useQuran();
   const { playAudio, isPlaying, togglePlayback, isLoading: audioLoading, currentUrl } = useAudioPlayer();
   const listRef = useRef<FlatList>(null);
 
@@ -56,18 +58,11 @@ export default function SurahDetailScreen() {
 
       const mapping = SURA_START_PAGES[surahIndex];
       const startPage = mapping.startPage;
-      const nextStartPage = surahIndex < SURA_START_PAGES.length - 1 
-        ? SURA_START_PAGES[surahIndex + 1].startPage 
+      const nextStartPage = surahIndex < SURA_START_PAGES.length - 1
+        ? SURA_START_PAGES[surahIndex + 1].startPage
         : 605;
       const endPage = Math.max(startPage, nextStartPage - 1);
-      
-      const pageCount = endPage - startPage + 1;
-      if (isMounted) {
-        setTotalPages(pageCount);
-        setLoadedPages(1);
-      }
 
-      // Fetch first page immediately for instant display
       const firstPageData = await fetchQuranPage(startPage, preferences.translationLanguage);
       if (!isMounted) return;
 
@@ -97,66 +92,41 @@ export default function SurahDetailScreen() {
       };
 
       setSurah(initialSurah);
-      setLoading(false); // Disable spinner so user can start reading immediately
+      setLoading(false);
 
-      // Update recent read in database
-      await updateRecentRead({
-        surahNumber: initialSurah.number,
-        ayahNumber: 1,
-        surahName: initialSurah.englishName
-      });
-
-      // Stream the remaining pages in the background
-      if (pageCount > 1) {
-        if (isMounted) setBgLoading(true);
-
+      // Background fetch remaining pages of the Surah
+      if (endPage > startPage) {
         let accumulatedAyahs = [...initialSurah.ayahs];
-
         for (let p = startPage + 1; p <= endPage; p++) {
           try {
             const pageData = await fetchQuranPage(p, preferences.translationLanguage);
             if (!isMounted) return;
-
             const pageAyahs = pageData.ayahs.filter(a => a.surah.number === surahNum);
-            if (pageAyahs.length > 0) {
-              const mapped = pageAyahs.map(a => ({
-                number: a.number,
-                text: a.text,
-                numberInSurah: a.numberInSurah,
-                juz: a.juz,
-                page: a.page,
-                translation: a.translation || '',
-                audio: getAudioUrl(mapping.number, a.number),
-                audioSecondary: [],
-                manzil: 0,
-                ruku: 0,
-                hizbQuarter: 0,
-                sajda: false
-              }));
+            const formatted = pageAyahs.map(a => ({
+              number: a.number,
+              text: a.text,
+              numberInSurah: a.numberInSurah,
+              juz: a.juz,
+              page: a.page,
+              translation: a.translation || '',
+              audio: getAudioUrl(mapping.number, a.number),
+              audioSecondary: [],
+              manzil: 0,
+              ruku: 0,
+              hizbQuarter: 0,
+              sajda: false
+            }));
 
-              accumulatedAyahs = [...accumulatedAyahs, ...mapped];
-              setSurah(prev => {
-                if (!prev) return null;
-                return {
-                  ...prev,
-                  ayahs: accumulatedAyahs
-                };
-              });
-            }
-
-            if (isMounted) {
-              setLoadedPages(p - startPage + 1);
-            }
+            accumulatedAyahs = [...accumulatedAyahs, ...formatted];
+            setSurah(prev => prev ? { ...prev, ayahs: accumulatedAyahs } : prev);
           } catch (pageErr) {
-            console.error(`Error loading background page ${p} for Surah ${surahNum}:`, pageErr);
+            console.error(`Error loading page ${p} for Surah ${surahNum}:`, pageErr);
           }
         }
-
-        if (isMounted) setBgLoading(false);
       }
     } catch (error) {
       console.error('Failed to load surah detail:', error);
-      if (isMounted) setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -173,10 +143,9 @@ export default function SurahDetailScreen() {
         ayahNumber: ayah.numberInSurah,
         surahName: surah?.englishName || '',
         text: ayah.text,
-        translation: ayah.translation
+        translation: ayah.translation || '',
       });
     }
-    refreshBookmarks();
   };
 
   const handlePlayAyah = (ayah: any) => {
@@ -188,43 +157,110 @@ export default function SurahDetailScreen() {
     }
   };
 
+  const filteredAyahs = useMemo(() => {
+    if (!surah?.ayahs) return [];
+    if (!verseSearch.trim()) return surah.ayahs;
+    const targetNum = parseInt(verseSearch.trim(), 10);
+    if (isNaN(targetNum)) return surah.ayahs;
+    return surah.ayahs.filter(a => a.numberInSurah === targetNum);
+  }, [surah, verseSearch]);
+
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color="#3B497D" />
       </View>
     );
   }
 
+  const mapping = SURA_START_PAGES.find(s => s.number === Number(id));
+
+  const cycleFontSize = () => {
+    const sizes = [18, 22, 26, 30];
+    const currentIndex = sizes.indexOf(preferences.fontSize);
+    const nextSize = sizes[(currentIndex + 1) % sizes.length];
+    updatePreferences({ fontSize: nextSize });
+  };
+
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+
+      {/* Top Controls Header Bar (Reference Photo 1) */}
+      <View style={styles.topControlHeader}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <ArrowLeft size={22} color={Colors.text} />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>{surah?.englishName}</Text>
-          {bgLoading ? (
-            <Text style={[styles.headerSubtitle, { color: Colors.accent, fontFamily: 'Poppins_600SemiBold' }]}>
-              Downloading... {Math.round((loadedPages / totalPages) * 100)}%
-            </Text>
-          ) : (
-            <Text style={styles.headerSubtitle}>{surah?.name}</Text>
-          )}
+
+        {/* Center Pill Mode Switcher: Mushaf vs Translation */}
+        <View style={styles.modeSwitchPill}>
+          <TouchableOpacity
+            style={styles.modePillBtn}
+            onPress={() => router.push(`/quran/mushaf?page=${mapping?.startPage || 1}`)}
+          >
+            <Text style={styles.modePillBtnText}>Mushaf</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.modePillBtn, styles.modePillBtnActive]}>
+            <Text style={styles.modePillBtnTextActive}>Translation</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Ionicons name="settings-outline" size={24} color={Colors.text} />
-        </TouchableOpacity>
+
+        {/* Right Icon Tools */}
+        <View style={styles.toolIconGroup}>
+          <TouchableOpacity style={styles.iconBtn} onPress={cycleFontSize}>
+            <Type size={18} color={Colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => {
+              if (surah?.ayahs?.[0]) handlePlayAyah(surah.ayahs[0]);
+            }}
+          >
+            <Play size={18} color={Colors.primary} fill={isPlaying ? Colors.primary : "transparent"} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search Input Bar (Search verse number) */}
+      <View style={styles.searchBarWrap}>
+        <View style={styles.searchBar}>
+          <Search size={18} color={Colors.textMuted} style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search verse number (1-${surah?.numberOfAyahs || 200})`}
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="number-pad"
+            value={verseSearch}
+            onChangeText={setVerseSearch}
+          />
+          {verseSearch ? (
+            <TouchableOpacity onPress={() => setVerseSearch('')}>
+              <X size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.body}>
         <FlatList
           ref={listRef}
-          data={surah?.ayahs}
+          data={filteredAyahs}
           keyExtractor={(item) => item.number.toString()}
+          ListHeaderComponent={() => (
+            <View style={styles.surahBannerCard}>
+              {/* Calligraphic Surah Name */}
+              <Text style={styles.bannerArabicTitle}>{surah?.name}</Text>
+
+              {/* Calligraphic Bismillah (except Surah At-Tawbah) */}
+              {Number(id) !== 9 && (
+                <Text style={styles.bismillahText}>
+                  بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
+                </Text>
+              )}
+            </View>
+          )}
           renderItem={({ item }) => (
-            <AyahItem 
+            <AyahItem
               ayah={item}
               surahName={surah?.englishName || ''}
               isBookmarked={isAyahBookmarked(item.numberInSurah)}
@@ -242,7 +278,7 @@ export default function SurahDetailScreen() {
           contentContainerStyle={styles.listContent}
         />
 
-        <AudioPlayerControls 
+        <AudioPlayerControls
           isPlaying={isPlaying}
           onToggle={togglePlayback}
           isLoading={audioLoading}
@@ -262,35 +298,97 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  header: {
+  topControlHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
   },
-  backButton: {
-    padding: 8,
+  iconBtn: {
+    padding: 6,
   },
-  headerTitleContainer: {
+  modeSwitchPill: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 20,
+    padding: 3,
+  },
+  modePillBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
-  headerTitle: {
+  modePillBtnActive: {
+    backgroundColor: Colors.surface,
+  },
+  modePillBtnText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  modePillBtnTextActive: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    color: Colors.text,
-  },
-  headerSubtitle: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.primary,
   },
-  settingsButton: {
-    padding: 8,
+  toolIconGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  searchBarWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: Colors.text,
+  },
+  surahBannerCard: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  bannerHeaderRow: {
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  mosqueIcon: {
+    fontSize: 18,
+  },
+  bannerArabicTitle: {
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 32,
+    color: Colors.primary,
+    marginBottom: 12,
+  },
+  bismillahText: {
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 22,
+    color: Colors.primary,
+    textAlign: 'center',
   },
   listContent: {
     paddingBottom: 100,

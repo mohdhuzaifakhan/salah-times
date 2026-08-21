@@ -1,4 +1,6 @@
+import { ContactUsModal } from '@/components/ContactUsModal';
 import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import { PrayerAlarmSettingsModal } from '@/components/PrayerAlarmSettingsModal';
 import Colors from '@/constants/colors';
 import { showCustomAlert } from '@/lib/custom-alert';
 import { auth } from '@/lib/firebaseConfig';
@@ -26,6 +28,8 @@ export default function SettingsScreen() {
   const { selectedCity, selectedState, openLocationModal } = useLocation();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [alarmSettingsModalVisible, setAlarmSettingsModalVisible] = useState(false);
+  const [contactModalVisible, setContactModalVisible] = useState(false);
 
   const handleManualUpdateCheck = async () => {
     if (checkingUpdate) return;
@@ -122,19 +126,8 @@ export default function SettingsScreen() {
   };
 
   const handleNotifications = () => {
-    showCustomAlert(
-      t('notifications'),
-      'Prayer alerts & 30s Azaan ringtone are enabled for your primary masjid.',
-      [
-        {
-          text: '🔊 Test Azaan',
-          onPress: () => {
-            void triggerPrayerAlarm('Test Namaaz', primaryMasjid?.name || 'Primary Masjid');
-          },
-        },
-        { text: 'OK', style: 'cancel' },
-      ]
-    );
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAlarmSettingsModalVisible(true);
   };
 
   const SettingItem = ({ icon, title, subtitle, rightElement, onPress }: any) => (
@@ -365,12 +358,12 @@ export default function SettingsScreen() {
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
           <SettingItem
-            icon="chatbubble-ellipses-outline"
-            title="Feedback Channel"
-            subtitle="Send feedback directly to the developer"
+            icon="call-outline"
+            title="Contact Us"
+            subtitle="Send phone number & message to support"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/global-feedback');
+              setContactModalVisible(true);
             }}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
@@ -397,6 +390,15 @@ export default function SettingsScreen() {
           </View>
         )}
       </ScrollView>
+      <PrayerAlarmSettingsModal
+        visible={alarmSettingsModalVisible}
+        onClose={() => setAlarmSettingsModalVisible(false)}
+        primaryMasjidName={primaryMasjid?.name}
+      />
+      <ContactUsModal
+        visible={contactModalVisible}
+        onClose={() => setContactModalVisible(false)}
+      />
       <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );

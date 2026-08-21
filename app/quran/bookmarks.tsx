@@ -146,7 +146,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   arabicText: {
-    fontSize: 18,
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 20,
     color: Colors.text,
     textAlign: 'right',
     marginBottom: 8,

@@ -11,7 +11,16 @@ import {
   Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Play,
+  Pause,
+  Bookmark,
+  Languages,
+  BookOpen,
+  Copy,
+  Share2,
+  X
+} from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { fetchTafseerFromAPI, MushafAyah } from '@/lib/quran/api';
 import { getTafseerFromFirestore } from '@/lib/quran/db';
@@ -98,7 +107,6 @@ export default function AyahBottomSheet({
     await Clipboard.setStringAsync(
       `${ayah.text}\n\n${ayah.translation}\n\n[Surah ${ayah.surah.englishName} : Ayat ${ayah.numberInSurah}]`
     );
-    alert("Copied to clipboard!");
   };
 
   const handleShare = async () => {
@@ -109,44 +117,41 @@ export default function AyahBottomSheet({
     });
   };
 
-  const toggleBookmark = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onBookmarkToggle();
-  };
-
   const triggerPlay = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPlay();
   };
 
-  if (!ayah) return null;
+  const toggleBookmark = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onBookmarkToggle();
+  };
+
+  if (!visible || !ayah) return null;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <TouchableOpacity style={styles.backdropTouch} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={onClose} />
 
-        <View style={[styles.sheetContent, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
-          {/* Handle Indicator */}
+        <View style={[styles.sheetContent, { paddingBottom: Math.max(20, insets.bottom) }]}>
           <View style={styles.sheetHandle} />
 
-          {/* Sheet Header */}
+          {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
-              <Text style={styles.surahTitle}>{ayah.surah.englishName} : {ayah.surah.name}</Text>
-              <Text style={styles.ayahSub}>Ayat {ayah.numberInSurah} (Parah {ayah.juz})</Text>
+              <Text style={styles.surahTitle}>{ayah.surah.englishName}</Text>
+              <Text style={styles.ayahSub}>
+                Surah {ayah.surah.number} • Verse {ayah.numberInSurah} • Page {ayah.page}
+              </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color={Colors.text} />
+
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+              <X size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {/* Tab Selection */}
+          {/* Action Navigation Tabs */}
           <View style={styles.tabBar}>
             <TouchableOpacity
               style={[styles.tabItem, activeTab === 'options' && styles.activeTabItem]}
@@ -174,42 +179,46 @@ export default function AyahBottomSheet({
               <View style={styles.optionsGrid}>
                 <TouchableOpacity style={styles.optionCard} onPress={triggerPlay}>
                   <View style={[styles.optionIconBadge, isPlaying && styles.activePlayBadge]}>
-                    <Ionicons name={isPlaying ? "pause" : "play"} size={24} color={isPlaying ? '#fff' : Colors.primary} />
+                    {isPlaying ? (
+                      <Pause size={22} color="#FFFFFF" fill="#FFFFFF" />
+                    ) : (
+                      <Play size={22} color={Colors.primary} fill={Colors.primary} />
+                    )}
                   </View>
                   <Text style={styles.optionText}>{isPlaying ? "Pause Audio" : "Play Audio"}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.optionCard} onPress={toggleBookmark}>
                   <View style={styles.optionIconBadge}>
-                    <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={24} color={isBookmarked ? Colors.accent : Colors.primary} />
+                    <Bookmark size={22} color={isBookmarked ? Colors.accent : Colors.primary} fill={isBookmarked ? Colors.accent : "transparent"} />
                   </View>
                   <Text style={styles.optionText}>{isBookmarked ? "Bookmarked" : "Bookmark Ayat"}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.optionCard} onPress={() => setActiveTab('translation')}>
                   <View style={styles.optionIconBadge}>
-                    <Ionicons name="language-outline" size={24} color={Colors.primary} />
+                    <Languages size={22} color={Colors.primary} />
                   </View>
                   <Text style={styles.optionText}>Translation</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.optionCard} onPress={() => setActiveTab('tafseer')}>
                   <View style={styles.optionIconBadge}>
-                    <Ionicons name="library-outline" size={24} color={Colors.primary} />
+                    <BookOpen size={22} color={Colors.primary} />
                   </View>
                   <Text style={styles.optionText}>Read Tafseer</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.optionCard} onPress={handleCopy}>
                   <View style={styles.optionIconBadge}>
-                    <Ionicons name="copy-outline" size={24} color={Colors.primary} />
+                    <Copy size={22} color={Colors.primary} />
                   </View>
                   <Text style={styles.optionText}>Copy Ayat</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.optionCard} onPress={handleShare}>
                   <View style={styles.optionIconBadge}>
-                    <Ionicons name="share-social-outline" size={24} color={Colors.primary} />
+                    <Share2 size={22} color={Colors.primary} />
                   </View>
                   <Text style={styles.optionText}>Share Ayat</Text>
                 </TouchableOpacity>
@@ -348,7 +357,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   activeTabText: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
   scrollArea: {
     minHeight: 280,
@@ -392,6 +401,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   arabicTextDisplay: {
+    fontFamily: 'Amiri_700Bold',
     fontSize: 24,
     color: Colors.text,
     lineHeight: 44,
@@ -442,7 +452,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   activeScholarChipText: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
   tafseerTitle: {
     fontFamily: 'Poppins_700Bold',

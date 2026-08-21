@@ -65,13 +65,21 @@ export function PrayerTimeRow({
 
 export function PrayerTimesCard({ timetable }: { timetable: Timetable }) {
   const now = new Date();
+  const isFriday = now.getDay() === 5;
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const dailyPrayers: (keyof Timetable)[] = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+
+  const activePrayers: (keyof Timetable)[] = isFriday
+    ? ["fajr", "jummah", "asr", "maghrib", "isha"]
+    : ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+
+  const displayPrayers: (keyof Timetable)[] = isFriday
+    ? ["fajr", "jummah", "asr", "maghrib", "isha"]
+    : ["fajr", "dhuhr", "asr", "maghrib", "isha", "jummah"];
 
   let nextPrayer: keyof Timetable | null = null;
   if (timetable) {
-    for (const prayer of dailyPrayers) {
-      const time = timetable[prayer];
+    for (const prayer of activePrayers) {
+      const time = prayer === "jummah" ? (timetable.jummah || timetable.dhuhr) : timetable[prayer];
       if (time && time.includes(":")) {
         const [h, m] = time.split(":");
         const prayerMinutes = parseInt(h, 10) * 60 + parseInt(m, 10);
@@ -86,14 +94,17 @@ export function PrayerTimesCard({ timetable }: { timetable: Timetable }) {
   return (
     <View style={styles.card}>
       {timetable ? (
-        PRAYER_ORDER.map((prayer) => (
-          <PrayerTimeRow
-            key={prayer}
-            prayer={prayer}
-            time={timetable[prayer]}
-            isNext={prayer === nextPrayer}
-          />
-        ))
+        displayPrayers.map((prayer) => {
+          const rawTime = prayer === "jummah" ? (timetable.jummah || timetable.dhuhr) : timetable[prayer];
+          return (
+            <PrayerTimeRow
+              key={prayer}
+              prayer={prayer}
+              time={rawTime}
+              isNext={prayer === nextPrayer}
+            />
+          );
+        })
       ) : (
         <View style={{ padding: 16, alignItems: "center" }}>
           <Text style={{ fontFamily: "Poppins_400Regular", color: Colors.textMuted }}>

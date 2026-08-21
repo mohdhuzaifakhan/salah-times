@@ -25,8 +25,12 @@
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",
         "USE_EXACT_ALARM",
+        "USE_FULL_SCREEN_INTENT",
+        "RECEIVE_BOOT_COMPLETED",
+        "SYSTEM_ALERT_WINDOW",
         "VIBRATE",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE"
       ]
     },
     "ios": {

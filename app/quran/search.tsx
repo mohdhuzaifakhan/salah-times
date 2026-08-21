@@ -314,10 +314,11 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   arabicText: {
-    fontSize: 18,
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 20,
     color: Colors.text,
     textAlign: 'right',
-    lineHeight: 32,
+    lineHeight: 36,
     marginBottom: 12,
   },
   translationContainer: {

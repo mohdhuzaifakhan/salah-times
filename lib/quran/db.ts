@@ -17,7 +17,7 @@ export interface Bookmark {
   ayahNumber: number;
   surahName: string;
   text: string;
-  translation: string;
+  translation?: string;
   createdAt: any;
   pageNumber?: number;
 }

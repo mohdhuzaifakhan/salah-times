@@ -71,40 +71,47 @@ function PrimaryMasjidCardView({ masjid, onPress }: { masjid: Masjid; onPress: (
           <Text style={styles.primaryCountdownText}>
             Next: <Text style={{ fontFamily: "Poppins_700Bold", color: Colors.primaryDark }}>{countdown.nextPrayerName}</Text> at {countdown.nextPrayerTimeFormatted}{" "}
             <Text style={{ fontFamily: "Poppins_600SemiBold", color: countdown.isNow ? Colors.error : Colors.accent }}>
-              ({countdown.isNow ? "NOW 🕌" : `in ${countdown.formattedRemaining}`})
+              ({countdown.isNow ? "NOW" : `in ${countdown.formattedRemaining}`})
             </Text>
           </Text>
         </View>
       )}
 
       <View style={styles.primaryCardTimesRow}>
-        {[
-          { key: "fajr", label: "Fajr" },
-          { key: "dhuhr", label: "Dhuhr" },
-          { key: "asr", label: "Asr" },
-          { key: "maghrib", label: "Maghrib" },
-          { key: "isha", label: "Isha" },
-        ].map((item) => {
-          const isNext = countdown.nextPrayerKey === item.key;
-          return (
-            <View
-              key={item.key}
-              style={[
-                styles.primaryCardTimeItem,
-                isNext && styles.primaryCardTimeItemActive,
-              ]}
-            >
-              <Text style={[styles.primaryCardTimeLabel, isNext && styles.primaryCardTimeLabelActive]}>
-                {item.label}
-              </Text>
-              <Text style={[styles.primaryCardTimeValue, isNext && styles.primaryCardTimeValueActive]}>
-                {formatTimeCompact(
-                  masjid.timetable[item.key as keyof typeof masjid.timetable]
-                )}
-              </Text>
-            </View>
-          );
-        })}
+        {(() => {
+          const isFriday = new Date().getDay() === 5;
+          const noonKey = isFriday ? "jummah" : "dhuhr";
+          const noonLabel = isFriday ? "Jummah" : "Dhuhr";
+          const noonTime = isFriday
+            ? (masjid.timetable.jummah || masjid.timetable.dhuhr)
+            : masjid.timetable.dhuhr;
+
+          return [
+            { key: "fajr", label: "Fajr", time: masjid.timetable.fajr },
+            { key: noonKey, label: noonLabel, time: noonTime },
+            { key: "asr", label: "Asr", time: masjid.timetable.asr },
+            { key: "maghrib", label: "Maghrib", time: masjid.timetable.maghrib },
+            { key: "isha", label: "Isha", time: masjid.timetable.isha },
+          ].map((item) => {
+            const isNext = countdown.nextPrayerKey === item.key;
+            return (
+              <View
+                key={item.key}
+                style={[
+                  styles.primaryCardTimeItem,
+                  isNext && styles.primaryCardTimeItemActive,
+                ]}
+              >
+                <Text style={[styles.primaryCardTimeLabel, isNext && styles.primaryCardTimeLabelActive]}>
+                  {item.label}
+                </Text>
+                <Text style={[styles.primaryCardTimeValue, isNext && styles.primaryCardTimeValueActive]}>
+                  {formatTimeCompact(item.time)}
+                </Text>
+              </View>
+            );
+          });
+        })()}
       </View>
     </Pressable>
   );

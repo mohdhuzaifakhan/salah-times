@@ -35,13 +35,17 @@ export function getUpcomingPrayerDetails(timetable: Timetable | null, now: Date 
   }
 
   const currentMs = now.getTime();
+  const isFriday = now.getDay() === 5;
+  const activeKeys: (keyof Timetable)[] = isFriday
+    ? ["fajr", "jummah", "asr", "maghrib", "isha"]
+    : ["fajr", "dhuhr", "asr", "maghrib", "isha"];
 
   // Construct target Date instances for today's prayers
   let targetDate: Date | null = null;
   let selectedKey: keyof Timetable | null = null;
 
-  for (const key of PRAYERS_KEYS) {
-    const timeStr = timetable[key];
+  for (const key of activeKeys) {
+    const timeStr = key === "jummah" ? (timetable.jummah || timetable.dhuhr) : timetable[key];
     if (!timeStr || !timeStr.includes(":")) continue;
 
     const [h, m] = timeStr.split(":").map(Number);
@@ -82,10 +86,14 @@ export function getUpcomingPrayerDetails(timetable: Timetable | null, now: Date 
     formattedRemaining = `${seconds}s`;
   }
 
+  const selectedTime = selectedKey === "jummah"
+    ? (timetable.jummah || timetable.dhuhr)
+    : (timetable[selectedKey] || "");
+
   return {
     nextPrayerKey: selectedKey,
     nextPrayerName: PRAYER_NAMES[selectedKey] || selectedKey,
-    nextPrayerTimeFormatted: formatCompactTime(timetable[selectedKey] || ""),
+    nextPrayerTimeFormatted: formatCompactTime(selectedTime),
     remainingSeconds: remainingSecs,
     formattedRemaining,
     isNow,

@@ -60,14 +60,22 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedCity(savedCity);
         setSelectedState(savedState || (allLocations[0]?.state ?? "Uttar Pradesh"));
         setActiveStateTab(savedState || (allLocations[0]?.state ?? "Uttar Pradesh"));
-      } else {
+      } else if (allLocations && allLocations.length > 0) {
         setSelectedCity(null);
         setSelectedState(null);
         setActiveStateTab(allLocations[0]?.state ?? "Uttar Pradesh");
         setShowModal(true);
+      } else {
+        // Fallback if no location data is returned from server
+        setSelectedCity("Rampur");
+        setSelectedState("Uttar Pradesh");
+        setActiveStateTab("Uttar Pradesh");
       }
     } catch (error) {
       console.error("Error loading location context:", error);
+      setSelectedCity("Rampur");
+      setSelectedState("Uttar Pradesh");
+      setActiveStateTab("Uttar Pradesh");
     } finally {
       setIsLoading(false);
     }
@@ -76,14 +84,6 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Prevent back button on Android if location is mandatory on first open
-  useEffect(() => {
-    if (showModal && isMandatory) {
-      const backHandler = BackHandler.addEventListener("hardwareBackPress", () => true);
-      return () => backHandler.remove();
-    }
-  }, [showModal, isMandatory]);
 
   const selectLocation = async (city: string, state: string) => {
     try {
@@ -110,10 +110,14 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const closeLocationModal = () => {
-    if (!isMandatory) {
-      setShowModal(false);
-      setSearch("");
+    if (!selectedCity) {
+      setSelectedCity("Rampur");
+      setSelectedState("Uttar Pradesh");
+      void AsyncStorage.setItem(CITY_KEY, "Rampur");
+      void AsyncStorage.setItem(STATE_KEY, "Uttar Pradesh");
     }
+    setShowModal(false);
+    setSearch("");
   };
 
   const currentCitiesList = useMemo(() => {
@@ -145,9 +149,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         visible={showModal && !isLoading}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => {
-          if (!isMandatory) closeLocationModal();
-        }}
+        onRequestClose={closeLocationModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -162,11 +164,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   </Text>
                 )}
               </View>
-              {!isMandatory && (
-                <TouchableOpacity onPress={closeLocationModal} style={styles.closeBtn}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity onPress={closeLocationModal} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
             </View>
 
             {/* State Tabs Selector */}

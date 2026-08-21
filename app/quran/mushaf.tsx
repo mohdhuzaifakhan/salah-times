@@ -1,32 +1,31 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
-  Platform,
-  Alert,
-  ScrollView,
-  Modal,
-  TextInput,
-  FlatList,
-  Pressable
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/colors';
-import { fetchQuranPage, MushafAyah, MushafPage, getAudioUrl } from '@/lib/quran/api';
-import { addBookmark, removeBookmark } from '@/lib/quran/db';
-import { useQuran } from '@/lib/quran/context';
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import AyahBottomSheet from '@/components/quran/AyahBottomSheet';
+import Colors from '@/constants/colors';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useLanguage } from '@/lib/language-context';
+import { fetchQuranPage, getAudioUrl, MushafAyah, MushafPage } from '@/lib/quran/api';
+import { PARAH_LIST, SURA_START_PAGES } from '@/lib/quran/constants';
+import { useQuran } from '@/lib/quran/context';
+import { addBookmark, removeBookmark } from '@/lib/quran/db';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { SURA_START_PAGES, PARAH_LIST } from '@/lib/quran/constants';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 const PAGES_ARRAY = Array.from({ length: 604 }, (_, i) => i + 1);
@@ -54,6 +53,36 @@ const getCurrentParah = (page: number) => {
     }
   }
   return activeParah;
+};
+
+const normalizeArabicForMatch = (str: string) =>
+  str
+    .replace(/[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED\u08D4-\u08E1\u08E3-\u08FF\u0670]/g, '')
+    .replace(/[إأآٱا]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const BISMILLAH_NORMALIZED = normalizeArabicForMatch('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ');
+
+const stripBismillahIfPresent = (text: string, surahNumber: number) => {
+  if (surahNumber === 1 || surahNumber === 9) return text.trim();
+
+  let normalized = '';
+  let cutIndex = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    normalized += normalizeArabicForMatch(text[i]);
+    if (normalized.trim().length >= BISMILLAH_NORMALIZED.length) {
+      cutIndex = i + 1;
+      break;
+    }
+  }
+  if (cutIndex === -1) return text.trim();
+
+  const candidate = normalizeArabicForMatch(text.slice(0, cutIndex));
+  return candidate === BISMILLAH_NORMALIZED ? text.slice(cutIndex).trim() : text.trim();
 };
 
 const toArabicDigits = (num: number) => {
@@ -113,7 +142,7 @@ const MushafPageItem = React.memo(({
             setNextPageData(data);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
     return () => {
       isMounted = false;
@@ -148,8 +177,8 @@ const MushafPageItem = React.memo(({
                 <Ionicons name="book-outline" size={48} color={Colors.textMuted} style={{ marginBottom: 12 }} />
               )}
               <Text style={styles.loaderText}>
-                {isError 
-                  ? "Failed to load page.\nPlease check your internet connection." 
+                {isError
+                  ? "Failed to load page.\nPlease check your internet connection."
                   : `Page ${pageNumber} is empty`}
               </Text>
             </View>
@@ -163,13 +192,15 @@ const MushafPageItem = React.memo(({
 
   return (
     <View style={styles.pageItemContainer}>
-      <Pressable onPress={onPagePress} style={styles.mushafPaper}>
+      {/* Page tap zoom functionality disabled */}
+      {/* <Pressable onPress={onPagePress} style={styles.mushafPaper}> */}
+      <View style={styles.mushafPaper}>
         <View style={styles.singleBorderFrame}>
           {/* Calligraphic Page Header inside paper border */}
           <View style={styles.innerPageHeader}>
             <Text style={styles.innerPageHeaderArabicText} numberOfLines={1}>
-              {uniqueSurahNumbers.length > 0 
-                ? pageData.ayahs.find(a => a.surah.number === uniqueSurahNumbers[0])?.surah.name 
+              {uniqueSurahNumbers.length > 0
+                ? pageData.ayahs.find(a => a.surah.number === uniqueSurahNumbers[0])?.surah.name
                 : ''}
             </Text>
             <Text style={styles.innerPageHeaderNumberText}>
@@ -181,7 +212,7 @@ const MushafPageItem = React.memo(({
           </View>
           <View style={styles.innerPageHeaderDivider} />
 
-          <ScrollView 
+          <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
@@ -209,59 +240,48 @@ const MushafPageItem = React.memo(({
                       </View>
                     )}
                     <View style={styles.surahTextContainer}>
-                      <Text style={styles.quranTextParagraph}>
-                        {surahAyahs.map((item, index) => {
-                          const isHighlightedText = selectedAyah?.number === item.number;
-                          const displayFontSize = Math.min(26, (fontSize * 0.95) + 4);
-                          const displayLineHeight = displayFontSize * 1.95;
+                      {(() => {
+                        const displayFontSize = Math.min(24, (fontSize * 0.95) + 3);
+                        const displayLineHeight = displayFontSize * 2.1;
 
-                          // Determine if a Ruku ends on this ayah
+                        const fullSurahText = surahAyahs.map((item, index) => {
+                          let textToRender = item.text.replace(/[\r\n]+/g, ' ').trim();
+                          if (item.numberInSurah === 1) {
+                            textToRender = stripBismillahIfPresent(textToRender, item.surah.number);
+                          }
+
                           const isLastAyahOfSurah = item.numberInSurah === item.surah.numberOfAyahs;
                           const isRukuFinished = (() => {
                             if (item.ruku === undefined) return false;
                             const nextAyahOnPage = surahAyahs[index + 1];
-                            if (nextAyahOnPage) {
-                              return nextAyahOnPage.ruku !== item.ruku;
-                            }
-                            if (isLastAyahOfSurah) {
-                              return true;
-                            }
-                            // If it's the last ayah of the page, check the first ayah of the next page
-                            if (nextPageData && nextPageData.ayahs && nextPageData.ayahs.length > 0) {
-                              const firstAyahNextPage = nextPageData.ayahs[0];
-                              return firstAyahNextPage.ruku !== item.ruku;
-                            }
+                            if (nextAyahOnPage) return nextAyahOnPage.ruku !== item.ruku;
+                            if (isLastAyahOfSurah) return true;
+                            if (nextPageData?.ayahs?.length) return nextPageData.ayahs[0].ruku !== item.ruku;
                             return false;
                           })();
 
-                          // Strip Bismillah prefix if not Surah 1 or 9 and it is the first ayah
-                          let textToRender = item.text;
-                          if (item.numberInSurah === 1 && item.surah.number !== 1 && item.surah.number !== 9) {
-                            const BISMILLAH_REGEX = /^(بِسْمِ\s+اللَّهِ\s+الرَّحْمَٰنِ\s+الرَّحِيمِ|بِسْمِ\s+ٱللَّهِ\s+ٱلرَّحْمَٰنِ\s+ٱلرَّحِيمِ)\s*/;
-                            textToRender = textToRender.replace(BISMILLAH_REGEX, "");
-                          }
+                          const badgeText = ` ﴿${toArabicDigits(item.numberInSurah)}﴾ `;
+                          const rukuText = isRukuFinished
+                            ? (item.surahRuku !== undefined ? ` ﴿ع/${toArabicDigits(item.surahRuku)}﴾ ` : " ﴿ع﴾ ")
+                            : "";
 
-                          return (
-                            <Text
-                              key={item.number}
-                              onPress={() => onAyahTap(item)}
-                              style={[
-                                styles.ayahInlineText,
-                                { fontSize: displayFontSize, lineHeight: displayLineHeight },
-                                isHighlightedText && styles.highlightedInlineAyahText
-                              ]}
-                            >
-                              {textToRender}
-                              <Text style={styles.ayahBadge}> ﴿{toArabicDigits(item.numberInSurah)}﴾ </Text>
-                              {isRukuFinished && (
-                                <Text style={styles.rukuInlineSign}>
-                                  {item.surahRuku !== undefined ? ` ﴿ع/${toArabicDigits(item.surahRuku)}﴾ ` : " ﴿ع﴾ "}
-                                </Text>
-                              )}
-                            </Text>
-                          );
-                        })}
-                      </Text>
+                          return textToRender + badgeText + rukuText;
+                        }).join('');
+
+                        const allahRegex = /(ٱ?اللَّهِ|ٱ?اللَّهُ|ٱ?اللَّهَ|اللَّهِ|اللَّهُ|اللَّهَ|اللّه|الله)/g;
+                        const parts = fullSurahText.split(allahRegex);
+
+                        return (
+                          <Text style={[styles.quranTextParagraph, { fontSize: displayFontSize, lineHeight: displayLineHeight }]}>
+                            {parts.map((part, idx) => {
+                              allahRegex.lastIndex = 0;
+                              return allahRegex.test(part)
+                                ? <Text key={`allah_${surahNumber}_${idx}`} style={{ color: Colors.error }}>{part}</Text>
+                                : part;
+                            })}
+                          </Text>
+                        );
+                      })()}
                     </View>
                   </View>
                 );
@@ -269,7 +289,7 @@ const MushafPageItem = React.memo(({
             </View>
           </ScrollView>
         </View>
-      </Pressable>
+      </View>
     </View>
   );
 });
@@ -284,7 +304,7 @@ export default function MushafScreen() {
   const [selectedAyah, setSelectedAyah] = useState<MushafAyah | null>(null);
   const [bottomSheetVisible, setBottomSheetVisible] = useState<boolean>(false);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
-  
+
   // Custom Surah Dropdown selector state
   const [showSurahModal, setShowSurahModal] = useState<boolean>(false);
   const [surahSearch, setSurahSearch] = useState<string>('');
@@ -423,20 +443,23 @@ export default function MushafScreen() {
     index,
   });
 
+  // Zoom / Full-Screen functionality on page click disabled as requested by user
   const toggleFullScreen = () => {
+    /* 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsFullScreen(!isFullScreen);
+    */
   };
 
   return (
     <View style={[styles.safeArea, { paddingTop: isFullScreen ? 0 : insets.top }]}>
       <StatusBar hidden={isFullScreen} barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Header Layout matches Mockup 2 (Removed rounded bottom corners) */}
+      {/* Header Layout with Clear Mode Switcher */}
       {!isFullScreen && (
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
 
           {/* Center: Surah selector dropdown */}
@@ -451,19 +474,20 @@ export default function MushafScreen() {
             <Text style={styles.headerSurahText} numberOfLines={1}>
               {currentSurahInfo.englishName}
             </Text>
-            <Ionicons name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 6 }} />
+            <Ionicons name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
-          {/* Right: Parah index */}
-          <View style={styles.headerRightContainer}>
-            <TouchableOpacity onPress={handlePageBookmarkToggle} style={[styles.iconButton, { marginRight: 4 }]}>
-              <Ionicons
-                name={isPageBookmarked ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color={isPageBookmarked ? Colors.accentLight : "#FFFFFF"}
-              />
+          {/* Mode Switcher: Mushaf vs Translation */}
+          <View style={styles.headerModeSwitch}>
+            <TouchableOpacity style={[styles.headerModeBtn, styles.headerModeBtnActive]}>
+              <Text style={styles.headerModeBtnTextActive}>Mushaf</Text>
             </TouchableOpacity>
-            <Text style={styles.headerJuzText}>Parah {currentParahInfo.number}</Text>
+            <TouchableOpacity
+              style={styles.headerModeBtn}
+              onPress={() => router.push(`/quran/${currentSurahInfo.number}`)}
+            >
+              <Text style={styles.headerModeBtnText}>Translation</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -613,25 +637,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    maxWidth: '55%',
+    maxWidth: '45%',
   },
   headerSurahText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  headerRightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerJuzText: {
-    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
-    marginLeft: 4,
+  },
+  headerModeSwitch: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 18,
+    padding: 2,
+  },
+  headerModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  headerModeBtnActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  headerModeBtnText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
+  headerModeBtnTextActive: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 11,
+    color: Colors.primary,
   },
   bookCanvas: {
     flex: 1,
@@ -640,7 +680,7 @@ const styles = StyleSheet.create({
   pageItemContainer: {
     width: width,
     height: '100%',
-    padding: 4,
+    padding: 2,
   },
   loaderContainer: {
     flex: 1,
@@ -655,26 +695,27 @@ const styles = StyleSheet.create({
   },
   mushafPaper: {
     flex: 1,
-    backgroundColor: '#FAFBF6', // Elegant warm off-white paper
+    backgroundColor: Colors.background,
     overflow: 'hidden',
   },
   singleBorderFrame: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: '#D4A843', // One single elegant gold border
-    margin: 8,
+    borderColor: Colors.primary,
+    margin: 2,
     padding: 8,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 4,
   },
   quranContent: {
     flex: 1,
+    width: '100%',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   surahBannerContainer: {
     width: '100%',
@@ -685,20 +726,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderColor: '#D4A843',
+    borderColor: Colors.primary,
     borderWidth: 1.5,
-    borderRadius: 8,
-    width: '94%',
+    borderRadius: 10,
+    width: '100%',
     height: 48,
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(212, 168, 67, 0.04)',
+    backgroundColor: Colors.overlay,
   },
   bannerOrnamentLeft: {
     width: 10,
     height: 10,
     borderLeftWidth: 1.5,
     borderTopWidth: 1.5,
-    borderColor: '#D4A843',
+    borderColor: Colors.primary,
     transform: [{ rotate: '-45deg' }],
   },
   bannerOrnamentRight: {
@@ -706,7 +747,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRightWidth: 1.5,
     borderTopWidth: 1.5,
-    borderColor: '#D4A843',
+    borderColor: Colors.primary,
     transform: [{ rotate: '45deg' }],
   },
   bannerCenterContent: {
@@ -716,18 +757,17 @@ const styles = StyleSheet.create({
   },
   bannerArabicTitle: {
     fontSize: 22,
-    fontFamily: 'Amiri_700Bold',
-    color: '#B08E35', // Premium dark gold title
+    fontFamily: 'Amiri_400Regular',
+    color: Colors.primary,
     textAlign: 'center',
   },
   bismillahText: {
     fontFamily: 'Amiri_400Regular',
-    fontSize: 21,
-    color: '#1A2E1A',
+    fontSize: 22,
+    color: Colors.text,
     textAlign: 'center',
     marginTop: 14,
-    marginBottom: 6,
-    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   arabicParagraph: {
     writingDirection: 'rtl',
@@ -736,7 +776,7 @@ const styles = StyleSheet.create({
   },
   ayahTextSegment: {
     fontFamily: 'Amiri_400Regular',
-    color: '#1A2E1A',
+    color: Colors.text,
     textAlign: 'center',
   },
   surahGroup: {
@@ -745,31 +785,32 @@ const styles = StyleSheet.create({
   },
   surahTextContainer: {
     width: '100%',
-    paddingHorizontal: 2,
-    paddingVertical: 10,
-    backgroundColor: '#FAFBF6',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: Colors.background,
   },
   quranTextParagraph: {
+    width: '100%',
+    fontFamily: 'Amiri_400Regular',
+    color: Colors.text,
     textAlign: 'justify',
     writingDirection: 'rtl',
+    includeFontPadding: false,
   },
   ayahInlineText: {
-    fontFamily: 'Lateef_400Regular',
-    color: '#1A2E1A',
+    fontFamily: 'Amiri_400Regular',
+    color: Colors.text,
   },
   highlightedInlineAyahText: {
-    backgroundColor: 'rgba(212, 168, 67, 0.22)',
+    backgroundColor: Colors.overlay,
   },
   ayahBadge: {
-    color: '#B08E35',
-    fontSize: 18,
-    fontFamily: 'Lateef_400Regular',
+    color: Colors.primary,
+    fontFamily: 'Amiri_400Regular',
   },
   rukuInlineSign: {
-    color: '#D4A843',
-    fontSize: 18,
-    fontFamily: 'Lateef_400Regular',
-    fontWeight: 'bold',
+    color: Colors.accent,
+    fontFamily: 'Amiri_400Regular',
   },
   bottomBar: {
     flexDirection: 'row',
@@ -903,19 +944,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   innerPageHeaderArabicText: {
-    fontFamily: 'Lateef_400Regular',
-    fontSize: 22,
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 16,
     color: Colors.primary,
   },
   innerPageHeaderNumberText: {
-    fontFamily: 'Lateef_400Regular',
-    fontSize: 20,
-    color: '#D4A843',
-    fontWeight: 'bold',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: Colors.primary,
   },
   innerPageHeaderDivider: {
-    height: 1.5,
-    backgroundColor: '#D4A843',
+    height: 1,
+    backgroundColor: Colors.borderLight,
     width: '100%',
     marginBottom: 8,
   },

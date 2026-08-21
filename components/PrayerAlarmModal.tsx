@@ -16,6 +16,7 @@ export const PrayerAlarmModal: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [prayerName, setPrayerName] = useState("Namaaz");
   const [masjidName, setMasjidName] = useState("");
+  const [offsetMinutes, setOffsetMinutes] = useState<number | undefined>(10);
   const [secondsLeft, setSecondsLeft] = useState(30);
 
   const pulseAnim = useState(() => new Animated.Value(1))[0];
@@ -26,6 +27,7 @@ export const PrayerAlarmModal: React.FC = () => {
       if (state.isPlaying) {
         setPrayerName(state.prayerName || "Namaaz");
         setMasjidName(state.masjidName || "");
+        setOffsetMinutes(state.offsetMinutes);
         setSecondsLeft(30);
       }
     });
@@ -73,6 +75,14 @@ export const PrayerAlarmModal: React.FC = () => {
 
   if (!visible) return null;
 
+  const titleText = offsetMinutes && offsetMinutes > 0
+    ? `${prayerName} Alarm - ${offsetMinutes} Mins Left`
+    : `${prayerName} Prayer Time`;
+
+  const subtitleText = offsetMinutes && offsetMinutes > 0
+    ? `${offsetMinutes} minutes before ${prayerName} namaaz${masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan ringtone.`
+    : `It is time for ${prayerName} namaaz${masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan ringtone.`;
+
   return (
     <Modal
       visible={visible}
@@ -91,11 +101,8 @@ export const PrayerAlarmModal: React.FC = () => {
             <Ionicons name="volume-high" size={40} color="#FFFFFF" />
           </Animated.View>
 
-          <Text style={styles.title}>🕌 {prayerName} Alarm - 10 Mins Left</Text>
-          <Text style={styles.subtitle}>
-            10 minutes before {prayerName} namaaz
-            {masjidName ? ` at ${masjidName}` : ""}. Playing 30s Azaan ringtone.
-          </Text>
+          <Text style={styles.title}>{titleText}</Text>
+          <Text style={styles.subtitle}>{subtitleText}</Text>
 
           <View style={styles.timerBadge}>
             <Ionicons name="time-outline" size={14} color={Colors.primary} />
