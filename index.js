@@ -1,8 +1,10 @@
-import { registerRootComponent } from 'expo';
+import notifee from '@notifee/react-native';
+import { handleNotifeeBackgroundEvent } from './lib/notifications';
+import "expo-router/entry";
 
-import App from './App';
+// Background event handler for process-surviving prayer alarms
+notifee.onBackgroundEvent(async (event) => {
+  await handleNotifeeBackgroundEvent(event);
+});
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
-registerRootComponent(App);
+

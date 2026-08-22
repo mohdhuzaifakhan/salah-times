@@ -14,7 +14,7 @@ import {
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import * as IntentLauncher from "expo-intent-launcher";
-import * as Notifications from "expo-notifications";
+import notifee, { AuthorizationStatus } from "@notifee/react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Bell,
@@ -71,8 +71,8 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
       setSettings(data);
 
       if (Platform.OS === "android") {
-        const perms = await Notifications.getPermissionsAsync();
-        const isGranted = perms.status === "granted";
+        const notifSettings = await notifee.getNotificationSettings();
+        const isGranted = notifSettings.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
         setHasExactAlarmPerm(isGranted);
       } else {
         setHasExactAlarmPerm(true);
@@ -143,8 +143,8 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
   const handleRequestOrOpenSettings = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const req = await Notifications.requestPermissionsAsync();
-      if (req.status === "granted") {
+      const notifSettings = await notifee.requestPermission();
+      if (notifSettings.authorizationStatus >= AuthorizationStatus.AUTHORIZED) {
         setHasExactAlarmPerm(true);
         void loadSettingsAndPermissions();
         return;
@@ -155,19 +155,34 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
 
     if (Platform.OS === "android") {
       try {
-        void IntentLauncher.startActivityAsync(
-          IntentLauncher.ActivityAction.APP_NOTIFICATION_SETTINGS,
-          {
-            extra: { "android.provider.extra.APP_PACKAGE": "com.huzaifa.salahtimes" },
-          }
-        );
+        await notifee.openAlarmPermissionSettings();
       } catch {
-        void IntentLauncher.startActivityAsync(
-          IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
-          {
-            data: "package:com.huzaifa.salahtimes",
-          }
-        );
+        try {
+          void IntentLauncher.startActivityAsync(
+            IntentLauncher.ActivityAction.APP_NOTIFICATION_SETTINGS,
+            {
+              extra: { "android.provider.extra.APP_PACKAGE": "com.huzaifa.salahtimes" },
+            }
+          );
+        } catch {
+          void IntentLauncher.startActivityAsync(
+            IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
+            {
+              data: "package:com.huzaifa.salahtimes",
+            }
+          );
+        }
+      }
+    }
+  };
+
+  const handleOpenBatterySettings = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === "android") {
+      try {
+        await notifee.openBatteryOptimizationSettings();
+      } catch (e) {
+        console.log("Failed to open battery optimization settings:", e);
       }
     }
   };
@@ -273,6 +288,17 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
               <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
               <Text style={styles.testButtonText}>Test Azaan Audio Alarm</Text>
             </TouchableOpacity>
+
+            {Platform.OS === "android" && (
+              <TouchableOpacity
+                style={[styles.testButton, { backgroundColor: Colors.surfaceAlt, borderWidth: 1, borderColor: Colors.borderLight, marginTop: 8 }]}
+                onPress={handleOpenBatterySettings}
+                activeOpacity={0.85}
+              >
+                <Smartphone size={18} color={Colors.text} />
+                <Text style={[styles.testButtonText, { color: Colors.text }]}>Disable Battery Optimization</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Android Exact Alarm / Notification Permission Warning Banner */}

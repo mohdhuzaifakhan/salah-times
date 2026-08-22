@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
@@ -22,8 +22,11 @@ interface ImageViewerModalProps {
 }
 
 export function ImageViewerModal({ visible, imageUrl, onClose, title }: ImageViewerModalProps) {
+  const [zoomScale, setZoomScale] = useState(1);
+
   useEffect(() => {
     if (visible) {
+      setZoomScale(1);
       const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
         onClose();
         return true;
@@ -33,6 +36,18 @@ export function ImageViewerModal({ visible, imageUrl, onClose, title }: ImageVie
   }, [visible, onClose]);
 
   if (!imageUrl) return null;
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => Math.min(prev + 0.5, 4));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => Math.max(prev - 0.5, 0.5));
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+  };
 
   return (
     <Modal
@@ -44,7 +59,7 @@ export function ImageViewerModal({ visible, imageUrl, onClose, title }: ImageVie
     >
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" />
-        
+
         {/* Top Header */}
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.header}>
@@ -54,7 +69,7 @@ export function ImageViewerModal({ visible, imageUrl, onClose, title }: ImageVie
                   {title}
                 </Text>
               ) : (
-                <Text style={styles.hintText}>Pinch to zoom • Tap outside to close</Text>
+                <Text style={styles.hintText}>Full Image View</Text>
               )}
             </View>
             <TouchableOpacity
@@ -68,35 +83,43 @@ export function ImageViewerModal({ visible, imageUrl, onClose, title }: ImageVie
           </View>
         </SafeAreaView>
 
-        {/* Zoomable Image Container */}
+        {/* Zoomable Image View */}
         <ScrollView
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
-          minimumZoomScale={1}
+          minimumZoomScale={0.5}
           maximumZoomScale={5}
           showsHorizontalScrollIndicator={false}
           showsVerticalScrollIndicator={false}
           centerContent={true}
           bouncesZoom={true}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.imageTouchable}
-            onPress={onClose}
-          >
+          <View style={[styles.imageWrapper, { transform: [{ scale: zoomScale }] }]}>
             <Image
               source={{ uri: imageUrl }}
               style={styles.fullImage}
               resizeMode="contain"
             />
-          </TouchableOpacity>
+          </View>
         </ScrollView>
 
-        {/* Bottom Hint */}
+        {/* Bottom Zoom Controls */}
         <SafeAreaView style={styles.bottomSafeArea}>
-          <View style={styles.bottomHintContainer}>
-            <Ionicons name="search" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.bottomHintText}>Pinch to zoom in / out</Text>
+          <View style={styles.controlsRow}>
+            <TouchableOpacity style={styles.controlBtn} onPress={handleZoomOut} activeOpacity={0.7}>
+              <Ionicons name="remove-circle-outline" size={20} color="#ffffff" />
+              <Text style={styles.controlBtnText}>Zoom Out</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.controlBtn} onPress={handleResetZoom} activeOpacity={0.7}>
+              <Ionicons name="refresh-outline" size={16} color="#ffffff" />
+              <Text style={styles.controlBtnText}>{Math.round(zoomScale * 100)}%</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.controlBtn} onPress={handleZoomIn} activeOpacity={0.7}>
+              <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+              <Text style={styles.controlBtnText}>Zoom In</Text>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </View>
@@ -111,7 +134,7 @@ const styles = StyleSheet.create({
   },
   headerSafeArea: {
     zIndex: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
   header: {
     flexDirection: "row",
@@ -150,8 +173,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 10,
   },
-  imageTouchable: {
+  imageWrapper: {
     width: "100%",
     height: "100%",
     justifyContent: "center",
@@ -160,21 +184,32 @@ const styles = StyleSheet.create({
   fullImage: {
     width: "100%",
     height: "100%",
+    minHeight: 320,
   },
   bottomSafeArea: {
     zIndex: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
-  bottomHintContainer: {
+  controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 12,
     paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  bottomHintText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.7)",
+  controlBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  controlBtnText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: "#ffffff",
   },
 });

@@ -125,7 +125,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -138,16 +138,24 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
-      void SplashScreen.hideAsync();
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync().catch(() => {});
       void initializeAds();
       void refreshPrimaryMasjidNotifications();
       const unsubscribe = setupPrayerAlarmListeners();
       return () => unsubscribe();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  // Safety fallback: if fonts take more than 3 seconds or fail, hide splash screen anyway
+  useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(fallbackTimer);
+  }, []);
+
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <ErrorBoundary>

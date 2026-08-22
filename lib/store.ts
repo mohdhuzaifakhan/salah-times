@@ -433,6 +433,40 @@ export async function createEvent(data: Omit<AppEvent, "id" | "createdAt">): Pro
     } as AppEvent;
 
     await setDoc(newEventRef, newEvent);
+
+    // Fetch masjid name if masjid-specific event
+    let masjidName = "";
+    const isGlobal = data.masjidId === "global";
+    if (!isGlobal && data.masjidId) {
+      try {
+        const masjidDoc = await getMasjidById(data.masjidId);
+        if (masjidDoc) masjidName = masjidDoc.name;
+      } catch (e) {
+        console.error("Error fetching masjid details for event notification:", e);
+      }
+    }
+
+    // 1. Log admin notification in Firestore
+    try {
+      await createAdminNotification(
+        isGlobal ? `New Global Event: ${data.title}` : `New Event (${masjidName || "Masjid"}): ${data.title}`,
+        data.description,
+        "event_created",
+        data.masjidId,
+        masjidName
+      );
+    } catch (e) {
+      console.error("Error creating admin notification for event:", e);
+    }
+
+    // 2. Send notification to targeted users (Global -> All users, Masjid -> Primary Masjid users)
+    try {
+      const { sendEventNotification } = await import("./notifications");
+      await sendEventNotification(newEvent, masjidName);
+    } catch (e) {
+      console.error("Error triggering event notification:", e);
+    }
+
     return newEvent;
   } catch (error) {
     console.error("Error creating event:", error);
@@ -720,6 +754,31 @@ export async function createAppMessage(
     if (idea) newMsg.idea = idea;
 
     await setDoc(msgRef, newMsg);
+
+    // 1. Create Admin Notification entry in Firestore so admin can view it in Admin Panel
+    try {
+      await createAdminNotification(
+        "New Contact / Support Message",
+        `From: ${phone || email || "User"} - ${details || message}`,
+        "contact_us",
+        "global",
+        "Contact Us"
+      );
+    } catch (e) {
+      console.error("Failed to create admin notification record:", e);
+    }
+
+    // 2. Trigger system notification so admin is alerted even when app is backgrounded or not open
+    try {
+      const { sendLocalAdminNotification } = await import("./notifications");
+      await sendLocalAdminNotification(
+        "New Contact Us Message",
+        `From ${phone || email || "User"}: ${details || message}`
+      );
+    } catch (e) {
+      console.error("Failed to trigger local admin notification:", e);
+    }
+
     return newMsg;
   } catch (error) {
     console.error("Error creating app message:", error);

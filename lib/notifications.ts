@@ -1,24 +1,17 @@
+import notifee, {
+  AndroidImportance,
+  AndroidVisibility,
+  Event,
+  EventType,
+  TriggerType,
+} from "@notifee/react-native";
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync as setAudioModeAsyncExpoAudio } from "expo-audio";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getAlarmSettings, PrayerKey } from "./alarm-settings";
 import { getMasjidById, getPrimaryMasjidId } from "./store";
 import { Masjid } from "./types";
 
-const LOCAL_AZAAN_ASSET = require("../assets/sounds/azaan.mp3");
-
-// Configure notifications presentation behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldVibrate: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldSetBadge: false,
-    priority: Notifications.AndroidNotificationPriority.MAX,
-  }),
-});
+const LOCAL_AZAAN_ASSET = require("../assets/sounds/Ghalwash.mp3");
 
 interface AlarmState {
   isPlaying: boolean;
@@ -44,7 +37,8 @@ function notifyAlarmSubscribers(state: AlarmState) {
 }
 
 /**
- * Immediately stops any actively playing prayer alarm ringtone.
+ * Stops actively playing prayer alarm ringtone and clears displayed notifications from tray.
+ * IMPORTANT: Does NOT cancel future scheduled trigger notifications!
  */
 export async function stopPrayerAlarm() {
   if (alarmTimeout) {
@@ -54,16 +48,24 @@ export async function stopPrayerAlarm() {
   if (activePlayer) {
     try {
       activePlayer.pause();
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
     activePlayer = null;
   }
+
+  try {
+    // Only cancel currently displayed notification banners, NOT future scheduled triggers!
+    await notifee.cancelDisplayedNotifications();
+  } catch {
+    // Ignore cleanup errors
+  }
+
   notifyAlarmSubscribers({ isPlaying: false });
 }
 
 /**
- * Triggers a 30-second Azaan audio ringtone when a prayer notification arrives.
+ * Triggers a 30-second Azaan audio ringtone when a prayer notification arrives in foreground or user opens app.
  * Instantly opens the popup modal and plays bundled Azaan audio through speaker.
  */
 export async function triggerPrayerAlarm(
@@ -104,27 +106,117 @@ export async function triggerPrayerAlarm(
 }
 
 /**
- * Ensures a high-priority, strict ALARM notification channel is created for Android.
+ * Ensures high-priority Android notification channels are created for Azaan, Default, and Silent alarms.
  */
-async function ensureAndroidChannel() {
+async function ensureAndroidChannels() {
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("prayer-alerts-alarm", {
-      name: "Prayer Alarm & Azaan",
-      description: "High-priority alarm and Azaan notifications for Namaz prayer times.",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 500, 250, 500, 250, 500],
+    // 1. High priority channel with native Azaan sound (azaan.mp3 in res/raw)
+    await notifee.createChannel({
+      id: "azaan-alarm",
+      name: "Prayer Alarm (Azaan)",
+      description: "High-priority Azaan sound notifications for Namaz prayer times.",
+      importance: AndroidImportance.HIGH,
+      vibrationPattern: [500, 250, 500, 250],
       lightColor: "#0D7377",
-      enableVibrate: true,
-      enableLights: true,
-      showBadge: true,
-      bypassDnd: true, // Bypasses Do Not Disturb for critical prayer alarms
-      sound: "azaan", // Referencing raw/azaan.mp3 natively
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      audioAttributes: {
-        usage: Notifications.AndroidAudioUsage.ALARM,
-        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
-      },
+      vibration: true,
+      lights: true,
+      bypassDnd: true,
+      sound: "azaan",
+      visibility: AndroidVisibility.PUBLIC,
     });
+
+    // 2. High priority channel with standard system default sound
+    await notifee.createChannel({
+      id: "default-alarm",
+      name: "Prayer Alarm (Default Sound)",
+      description: "High-priority system sound notifications for Namaz prayer times.",
+      importance: AndroidImportance.HIGH,
+      vibrationPattern: [500, 250, 500, 250],
+      lightColor: "#0D7377",
+      vibration: true,
+      lights: true,
+      bypassDnd: true,
+      sound: "default",
+      visibility: AndroidVisibility.PUBLIC,
+    });
+
+    // 3. Silent channel
+    await notifee.createChannel({
+      id: "silent-alarm",
+      name: "Prayer Alarm (Silent)",
+      description: "Silent notifications for Namaz prayer times.",
+      importance: AndroidImportance.DEFAULT,
+      vibration: false,
+      visibility: AndroidVisibility.PUBLIC,
+    });
+  }
+}
+
+/**
+ * Triggers a local system notification for admin alerts (e.g., when a user submits a Contact Us message).
+ */
+export async function sendLocalAdminNotification(title: string, body: string) {
+  try {
+    if (Platform.OS === "android") {
+      await ensureAndroidChannels();
+      await notifee.displayNotification({
+        title,
+        body,
+        android: {
+          channelId: "azaan-alarm",
+          pressAction: {
+            id: "default",
+          },
+        },
+      });
+    } else {
+      await notifee.displayNotification({
+        title,
+        body,
+      });
+    }
+  } catch (err) {
+    console.error("[Notifications] Error displaying local admin notification:", err);
+  }
+}
+
+/**
+ * Triggers a local system notification when a new Event is created.
+ */
+export async function sendEventNotification(
+  event: { title: string; description: string; masjidId: string },
+  masjidName?: string
+) {
+  try {
+    const isGlobal = event.masjidId === "global";
+    const primaryId = await getPrimaryMasjidId();
+
+    if (isGlobal || (primaryId && primaryId === event.masjidId)) {
+      const notifTitle = isGlobal
+        ? `Announcement: ${event.title}`
+        : `${masjidName || "Masjid Event"}: ${event.title}`;
+
+      if (Platform.OS === "android") {
+        await ensureAndroidChannels();
+        await notifee.displayNotification({
+          title: notifTitle,
+          body: event.description,
+          android: {
+            channelId: "azaan-alarm",
+            pressAction: {
+              id: "default",
+            },
+          },
+        });
+      } else {
+        await notifee.displayNotification({
+          title: notifTitle,
+          body: event.description,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[Notifications] Error sending event notification:", err);
   }
 }
 
@@ -144,20 +236,34 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
     try {
       const settings = await getAlarmSettings();
 
-      // Clean up previous scheduled notifications
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      // Cancel only previous scheduled prayer trigger notifications (preserve admin/event notifs)
+      try {
+        const existingIds = await notifee.getTriggerNotificationIds();
+        for (const id of existingIds) {
+          if (id.startsWith("prayer_")) {
+            await notifee.cancelTriggerNotification(id);
+          }
+        }
+      } catch (err) {
+        console.warn("[Notifications] Error clearing existing trigger IDs:", err);
+      }
 
       if (!settings.globalEnabled) {
         return;
       }
 
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== "granted") {
-        console.warn("[Notifications] Notification permissions not granted!");
-        return;
+      // Request permissions
+      try {
+        const permResult = await notifee.requestPermission();
+        if (permResult.authorizationStatus === 0) {
+          console.warn("[Notifications] Notification permissions not granted by user.");
+          return;
+        }
+      } catch (permErr) {
+        console.warn("[Notifications] Error requesting notification permissions:", permErr);
       }
 
-      await ensureAndroidChannel();
+      await ensureAndroidChannels();
 
       const dailyPrayers: PrayerKey[] = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
       const prayerLabels: Record<PrayerKey, string> = {
@@ -219,35 +325,60 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
               ? `${prayerName} namaaz starts in ${prayerConfig.offsetMinutes} minutes (${timeStr}) at ${masjid.name}.`
               : `It is time for ${prayerName} namaaz (${timeStr}) at ${masjid.name}.`;
 
-            const soundName = prayerConfig.sound === "azaan" ? "azaan.mp3" : prayerConfig.sound === "default" ? "default" : undefined;
+            const channelId =
+              prayerConfig.sound === "azaan"
+                ? "azaan-alarm"
+                : prayerConfig.sound === "default"
+                ? "default-alarm"
+                : "silent-alarm";
 
-            await Notifications.scheduleNotificationAsync({
-              identifier: notificationId,
-              content: {
-                title: `⏰ ${prayerName} Alarm - ${offsetLabel}`,
-                body: bodyText,
-                sound: soundName,
-                vibrate: settings.vibrate ? [0, 500, 250, 500] : undefined,
-                priority: Notifications.AndroidNotificationPriority.MAX,
-                data: {
-                  masjidId: masjid.id,
-                  prayer: prayerKey,
-                  prayerName: prayerName,
-                  masjidName: masjid.name,
-                  isPrayerAlarm: true,
-                  offsetMinutes: prayerConfig.offsetMinutes,
+            try {
+              await notifee.createTriggerNotification(
+                {
+                  id: notificationId,
+                  title: `⏰ ${prayerName} Alarm - ${offsetLabel}`,
+                  body: bodyText,
+                  data: {
+                    masjidId: masjid.id,
+                    prayer: prayerKey,
+                    prayerName: prayerName,
+                    masjidName: masjid.name,
+                    isPrayerAlarm: "true",
+                    offsetMinutes: String(prayerConfig.offsetMinutes || 0),
+                  },
+                  android: {
+                    channelId,
+                    importance: AndroidImportance.HIGH,
+                    vibrationPattern: settings.vibrate ? [500, 250, 500, 250] : undefined,
+                    pressAction: {
+                      id: "default",
+                      launchActivity: "default",
+                    },
+                    actions: [
+                      {
+                        title: "STOP ALARM",
+                        pressAction: { id: "stop" },
+                      },
+                    ],
+                    autoCancel: true,
+                  },
                 },
-              },
-              trigger: {
-                type: Notifications.SchedulableTriggerInputTypes.DATE,
-                date: targetTriggerTime,
-                ...(Platform.OS === "android" ? { channelId: "prayer-alerts-alarm" } : {}),
-              },
-            });
-            scheduledCount++;
+                {
+                  type: TriggerType.TIMESTAMP,
+                  timestamp: targetTriggerTime.getTime(),
+                  alarmManager: {
+                    allowWhileIdle: true,
+                  },
+                }
+              );
+              scheduledCount++;
+            } catch (singleSchedErr) {
+              console.error(`[Notifications] Error scheduling notification ${notificationId}:`, singleSchedErr);
+            }
           }
         }
       }
+      console.log(`[Notifications] Successfully scheduled ${scheduledCount} exact prayer alarms via Notifee.`);
     } catch (error) {
       console.error("[Notifications] Error scheduling prayer notifications:", error);
     }
@@ -264,40 +395,56 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
  * Foreground watcher placeholder for primary masjid countdown state (no duplicate triggers).
  */
 export function setupForegroundPrayerWatcher(_getPrimaryMasjid: () => Masjid | null) {
-  // Foreground alerts are handled directly by NotificationReceivedListener when scheduled 10m alert arrives
   return () => { };
 }
 
 /**
- * Initializes listeners for foreground notifications & user notification taps.
+ * Handles background Notifee events registered in index.js outside React tree.
+ * Executes when an exact alarm trigger notification fires or user interacts with notification while app process is backgrounded or killed.
+ */
+export async function handleNotifeeBackgroundEvent(event: Event) {
+  const { type, detail } = event;
+
+  if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
+    await stopPrayerAlarm();
+  }
+}
+
+/**
+ * Initializes listeners for foreground Notifee notifications & user notification taps.
+ * Also checks initial notification on app launch from killed state.
  */
 export function setupPrayerAlarmListeners() {
-  const notifSub = Notifications.addNotificationReceivedListener((notification) => {
-    const data = notification.request.content.data;
-    if (data?.isPrayerAlarm) {
+  // Check if app was launched by tapping a prayer alarm notification
+  notifee.getInitialNotification().then((initialNotif) => {
+    if (initialNotif && initialNotif.notification?.data?.isPrayerAlarm === "true") {
+      const data = initialNotif.notification.data;
       const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
       const masjidName = typeof data.masjidName === "string" ? data.masjidName : "";
-      const offsetMinutes = typeof data.offsetMinutes === "number" ? data.offsetMinutes : 10;
+      const offsetMinutes = Number(data.offsetMinutes) || 0;
       void triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
+    }
+  }).catch((err) => {
+    console.warn("[Notifications] Error checking initial notification:", err);
+  });
+
+  const unsubscribe = notifee.onForegroundEvent(async (event: Event) => {
+    const { type, detail } = event;
+
+    if (type === EventType.DELIVERED || type === EventType.PRESS) {
+      const data = detail.notification?.data;
+      if (data?.isPrayerAlarm === "true") {
+        const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
+        const masjidName = typeof data.masjidName === "string" ? data.masjidName : "";
+        const offsetMinutes = Number(data.offsetMinutes) || 0;
+        await triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
+      }
+    } else if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
+      await stopPrayerAlarm();
     }
   });
 
-  const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data;
-    if (data?.isPrayerAlarm) {
-      const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
-      const masjidName = typeof data.masjidName === "string" ? data.masjidName : "";
-      const offsetMinutes = typeof data.offsetMinutes === "number" ? data.offsetMinutes : 10;
-      void triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
-    } else {
-      void stopPrayerAlarm();
-    }
-  });
-
-  return () => {
-    notifSub.remove();
-    responseSub.remove();
-  };
+  return unsubscribe;
 }
 
 export async function refreshPrimaryMasjidNotifications() {
@@ -315,11 +462,15 @@ export async function refreshPrimaryMasjidNotifications() {
 
 export async function clearScheduledNotifications() {
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    const existingIds = await notifee.getTriggerNotificationIds();
+    for (const id of existingIds) {
+      if (id.startsWith("prayer_")) {
+        await notifee.cancelTriggerNotification(id);
+      }
+    }
     await stopPrayerAlarm();
   } catch (error) {
     console.error("[Notifications] Failed to clear notifications:", error);
   }
 }
-
 

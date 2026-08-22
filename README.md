@@ -66,3 +66,5 @@ Preferred communication style: Simple, everyday language.
 - **Expo Services**: expo-location (available but usage not fully visible in provided files), expo-image-picker, expo-crypto (used for UUID generation in local store)
 - **TanStack React Query**: Data fetching/caching layer configured to hit the Express API via `EXPO_PUBLIC_DOMAIN`
 - **No external APIs or third-party services** are currently integrated (no Firebase, no external prayer time APIs)
+
+- .\gradlew bundleRelease -PreactNativeArchitectures=arm64-v8a
