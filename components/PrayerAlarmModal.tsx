@@ -39,7 +39,7 @@ export const PrayerAlarmModal: React.FC = () => {
     let interval: ReturnType<typeof setInterval>;
     if (visible && secondsLeft > 0) {
       interval = setInterval(() => {
-        setSecondsLeft((prev) => prev - 1);
+        setSecondsLeft((prev) => Math.max(0, prev - 1));
       }, 1000);
     }
     return () => {

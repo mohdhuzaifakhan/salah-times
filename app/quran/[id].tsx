@@ -1,8 +1,9 @@
 import AudioPlayerControls from '@/components/quran/AudioPlayerControls';
 import AyahItem from '@/components/quran/AyahItem';
+import { CalligraphySettingsModal } from '@/components/quran/CalligraphySettingsModal';
 import Colors from '@/constants/colors';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
-import { fetchQuranPage, getAudioUrl, SurahDetail } from '@/lib/quran/api';
+import { fetchQuranPage, getAudioUrl, stripBismillahIfPresent, SurahDetail } from '@/lib/quran/api';
 import { SURA_START_PAGES } from '@/lib/quran/constants';
 import { useQuran } from '@/lib/quran/context';
 import { addBookmark, removeBookmark } from '@/lib/quran/db';
@@ -34,6 +35,7 @@ export default function SurahDetailScreen() {
   const [surah, setSurah] = useState<SurahDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [verseSearch, setVerseSearch] = useState('');
+  const [showCalligraphyModal, setShowCalligraphyModal] = useState(false);
   const { bookmarks, preferences, updatePreferences } = useQuran();
   const { playAudio, isPlaying, togglePlayback, isLoading: audioLoading, currentUrl } = useAudioPlayer();
   const listRef = useRef<FlatList>(null);
@@ -207,7 +209,7 @@ export default function SurahDetailScreen() {
 
         {/* Right Icon Tools */}
         <View style={styles.toolIconGroup}>
-          <TouchableOpacity style={styles.iconBtn} onPress={cycleFontSize}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowCalligraphyModal(true)}>
             <Type size={18} color={Colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -250,13 +252,6 @@ export default function SurahDetailScreen() {
             <View style={styles.surahBannerCard}>
               {/* Calligraphic Surah Name */}
               <Text style={styles.bannerArabicTitle}>{surah?.name}</Text>
-
-              {/* Calligraphic Bismillah (except Surah At-Tawbah) */}
-              {Number(id) !== 9 && (
-                <Text style={styles.bismillahText}>
-                  بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
-                </Text>
-              )}
             </View>
           )}
           renderItem={({ item }) => (
@@ -269,6 +264,9 @@ export default function SurahDetailScreen() {
               isPlaying={isPlaying && currentUrl === getAudioUrl(Number(id), item.number)}
               fontSize={preferences.fontSize}
               showTranslation={preferences.showTranslation}
+              showTransliteration={preferences.showTransliteration}
+              scriptFont={preferences.scriptFont}
+              lineSpacing={preferences.lineSpacing}
             />
           )}
           initialNumToRender={10}
@@ -286,6 +284,11 @@ export default function SurahDetailScreen() {
           subtitle="Mishary Rashid Alafasy"
         />
       </View>
+
+      <CalligraphySettingsModal
+        visible={showCalligraphyModal}
+        onClose={() => setShowCalligraphyModal(false)}
+      />
     </View>
   );
 }

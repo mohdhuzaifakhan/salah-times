@@ -49,6 +49,18 @@ export default function ManageGlobalFeedbackScreen() {
     }
   };
 
+  const openWhatsApp = (phone: string) => {
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    if (!cleanPhone) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openURL(`https://wa.me/${cleanPhone}`);
+  };
+
+  const openCall = (phone: string) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openURL(`tel:${phone}`);
+  };
+
   const handleDelete = (id: string) => {
     showCustomAlert(
       "Delete Ticket",
@@ -111,19 +123,23 @@ export default function ManageGlobalFeedbackScreen() {
               <View style={styles.cardHeader}>
                 <View style={styles.infoCol}>
                   {item.phone ? (
-                    <TouchableOpacity
-                      style={styles.phoneCallBtn}
-                      onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        void Linking.openURL(`tel:${item.phone}`);
-                      }}
-                    >
-                      <Ionicons name="call" size={14} color="#ffffff" />
-                      <Text style={styles.phoneCallText}>{item.phone}</Text>
-                      <View style={styles.callTag}>
-                        <Text style={styles.callTagText}>Call</Text>
-                      </View>
-                    </TouchableOpacity>
+                    <View style={styles.contactBtnGroup}>
+                      <TouchableOpacity
+                        style={styles.whatsAppBtn}
+                        onPress={() => openWhatsApp(item.phone!)}
+                      >
+                        <Ionicons name="logo-whatsapp" size={15} color="#ffffff" />
+                        <Text style={styles.contactBtnText}>WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.phoneCallBtn}
+                        onPress={() => openCall(item.phone!)}
+                      >
+                        <Ionicons name="call" size={14} color="#ffffff" />
+                        <Text style={styles.contactBtnText}>Call ({item.phone})</Text>
+                      </TouchableOpacity>
+                    </View>
                   ) : null}
                   {item.email ? (
                     <View style={styles.infoRow}>
@@ -263,6 +279,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.text,
   },
+  contactBtnGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  whatsAppBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
   phoneCallBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -270,23 +301,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    alignSelf: "flex-start",
     gap: 6,
   },
-  phoneCallText: {
+  contactBtnText: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 13,
-    color: "#ffffff",
-  },
-  callTag: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  callTagText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 10,
+    fontSize: 12,
     color: "#ffffff",
   },
   subjectLabel: {

@@ -8,10 +8,12 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Pressable,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,6 +51,18 @@ export default function MasjidFeedbackScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openWhatsApp = (phone: string) => {
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    if (!cleanPhone) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openURL(`https://wa.me/${cleanPhone}`);
+  };
+
+  const openCall = (phone: string) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Linking.openURL(`tel:${phone}`);
   };
 
   const handleDelete = (id: string) => {
@@ -158,11 +172,34 @@ export default function MasjidFeedbackScreen() {
                 <Text style={styles.messageText}>{item.message}</Text>
               )}
 
-              <View style={styles.cardFooter}>
-                <View style={styles.emailRow}>
-                  <Ionicons name="call-outline" size={14} color={Colors.textMuted} />
-                  <Text style={styles.emailText}>{item.phone}</Text>
+              {item.phone ? (
+                <View style={styles.contactSection}>
+                  <View style={styles.phoneLabelRow}>
+                    <Ionicons name="person-circle-outline" size={15} color={Colors.textMuted} />
+                    <Text style={styles.phoneLabelText}>Contact: {item.phone}</Text>
+                  </View>
+                  <View style={styles.contactBtnGroup}>
+                    <TouchableOpacity
+                      style={styles.whatsAppBtn}
+                      onPress={() => openWhatsApp(item.phone)}
+                    >
+                      <Ionicons name="logo-whatsapp" size={14} color="#ffffff" />
+                      <Text style={styles.contactBtnText}>WhatsApp</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.phoneCallBtn}
+                      onPress={() => openCall(item.phone)}
+                    >
+                      <Ionicons name="call" size={13} color="#ffffff" />
+                      <Text style={styles.contactBtnText}>Call</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
+              ) : null}
+
+              <View style={styles.cardFooter}>
+                <View />
                 <View style={styles.actionRow}>
                   {(item.masjidId || masjidId) && (
                     <Pressable
@@ -372,16 +409,51 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  emailRow: {
+  contactSection: {
+    backgroundColor: "rgba(13, 115, 119, 0.04)",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(13, 115, 119, 0.08)",
+  },
+  phoneLabelRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flex: 1,
+    marginBottom: 8,
   },
-  emailText: {
-    fontFamily: "Poppins_400Regular",
+  phoneLabelText: {
+    fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
-    color: Colors.textMuted,
-    flex: 1,
+    color: Colors.text,
+  },
+  contactBtnGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  whatsAppBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 6,
+  },
+  phoneCallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 6,
+  },
+  contactBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: "#ffffff",
   },
 });

@@ -14,9 +14,15 @@ import {
 import { auth } from '../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 
-interface QuranPreferences {
+export type QuranScriptFont = 'amiri' | 'scheherazade' | 'lateef';
+export type QuranLineSpacing = 'compact' | 'normal' | 'relaxed';
+
+export interface QuranPreferences {
   fontSize: number;
   showTranslation: boolean;
+  showTransliteration: boolean;
+  scriptFont: QuranScriptFont;
+  lineSpacing: QuranLineSpacing;
   mushafMode: boolean;
   translationLanguage: string;
 }
@@ -46,6 +52,9 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [preferences, setPreferences] = useState<QuranPreferences>({
     fontSize: 24,
     showTranslation: true,
+    showTransliteration: true,
+    scriptFont: 'scheherazade',
+    lineSpacing: 'normal',
     mushafMode: false,
     translationLanguage: 'en.sahih',
   });

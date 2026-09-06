@@ -21,6 +21,7 @@ import {
   User,
   X
 } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
@@ -103,45 +104,45 @@ export default function QuranHomeScreen() {
   }, []);
 
   const renderJuzItem = useCallback(({ item }: { item: ParahMapping }) => {
-    const nextParahPage = item.number < 30 ? PARAH_LIST[item.number].startPage : 605;
-    const juzSurahs = SURA_START_PAGES.filter(
-      s => s.startPage >= item.startPage && s.startPage < nextParahPage
-    );
-
     return (
-      <View style={styles.juzCardContainer}>
-        {/* Juz Header */}
-        <View style={styles.juzHeaderRow}>
-          <View>
-            <Text style={styles.juzTitle}>Juz {item.number}</Text>
-            <Text style={styles.juzSubtext}>{item.englishName}</Text>
-          </View>
-          <Text style={styles.juzPageText}>Page {item.startPage}</Text>
+      <TouchableOpacity
+        style={styles.parahCardContainer}
+        onPress={() => router.push(`/quran/mushaf?page=${item.startPage}`)}
+        activeOpacity={0.75}
+      >
+        {/* Left 8-pointed scalloped star badge */}
+        <View style={styles.numberBadgeWrap}>
+          <Svg width={40} height={40} viewBox="0 0 36 40">
+            <Path
+              d="M18 2 L22 6 L27 4 L28 9 L33 11 L31 16 L35 20 L31 24 L33 29 L28 31 L27 36 L22 34 L18 38 L14 34 L9 36 L8 31 L3 29 L5 24 L1 20 L5 16 L3 11 L8 9 L9 4 L14 6 Z"
+              fill="none"
+              stroke={Colors.primary}
+              strokeWidth="1.5"
+            />
+          </Svg>
+          <Text style={styles.numberText}>{item.number}</Text>
         </View>
 
-        {/* Inner Surah Pills */}
-        <View style={styles.juzSurahsGrid}>
-          {juzSurahs.map((surah) => (
-            <TouchableOpacity
-              key={surah.number}
-              style={styles.juzSurahPill}
-              onPress={() => handleSuraPress(surah.number)}
-              activeOpacity={0.75}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.miniSurahName} numberOfLines={1}>
-                  {surah.englishName}
-                </Text>
-                <Text style={styles.miniSurahVerses}>
-                  Start Pg {surah.startPage}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+        {/* Middle Parah Info */}
+        <View style={styles.infoContainer}>
+          <Text style={styles.englishName} numberOfLines={1}>
+            Parah {item.number} ({item.englishName})
+          </Text>
+          <Text style={styles.subInfo} numberOfLines={1}>
+            Start Page {item.startPage} • {item.surahStart}
+          </Text>
         </View>
-      </View>
+
+        {/* Right Arabic Name & Play Circle */}
+        <View style={styles.rightContainer}>
+          <Text style={styles.arabicName}>{item.arabicName}</Text>
+          <View style={styles.playButton}>
+            <Play size={14} color={Colors.primary} fill={Colors.primary} />
+          </View>
+        </View>
+      </TouchableOpacity>
     );
-  }, [handleSuraPress]);
+  }, []);
 
   const renderItem = useCallback(({ item }: { item: Surah | ParahMapping }) => {
     if (activeTab === 'surahs') {
@@ -224,7 +225,7 @@ export default function QuranHomeScreen() {
           >
             {activeTab === 'parah' && <Check size={16} color={Colors.primary} style={{ marginRight: 4 }} />}
             <Text style={[styles.segmentText, activeTab === 'parah' && styles.segmentTextActive]}>
-              Juz
+              Parah
             </Text>
           </TouchableOpacity>
         </View>
@@ -243,7 +244,7 @@ export default function QuranHomeScreen() {
           <Search size={18} color={Colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search surah or juz..."
+            placeholder="Search surah or parah..."
             value={search}
             onChangeText={setSearch}
             placeholderTextColor={Colors.textMuted}
@@ -445,58 +446,70 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
   },
-  juzCardContainer: {
+  parahCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: 16,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
-  juzHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+  numberBadgeWrap: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
   },
-  juzTitle: {
+  numberText: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    textAlignVertical: 'center',
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 17,
+    fontSize: 12,
+    color: Colors.primary,
+    includeFontPadding: false,
+  },
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  englishName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
     color: Colors.text,
   },
-  juzSubtext: {
+  subInfo: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 12,
     color: Colors.textSecondary,
+    marginTop: 2,
   },
-  juzPageText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  juzSurahsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  juzSurahPill: {
+  rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 14,
-    padding: 10,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    gap: 12,
+    marginLeft: 8,
   },
-  miniSurahName: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 13,
-    color: Colors.text,
+  arabicName: {
+    fontFamily: 'Amiri_700Bold',
+    fontSize: 18,
+    color: Colors.primary,
   },
-  miniSurahVerses: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 10,
-    color: Colors.textSecondary,
+  playButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 2,
   },
 });

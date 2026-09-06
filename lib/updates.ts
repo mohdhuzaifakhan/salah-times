@@ -1,5 +1,5 @@
 import { db } from "./firebaseConfig";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, getDocFromServer, setDoc } from "firebase/firestore";
 import Constants from "expo-constants";
 import { Linking, Platform } from "react-native";
 
@@ -47,12 +47,25 @@ export function compareVersions(v1: string, v2: string): number {
 
 /**
  * Fetches the update configuration from Firestore document `/config/app_update`.
+ * If forceServer is true, it attempts to fetch directly from the Firestore server to bypass stale cache.
  * If it does not exist, it initializes it with DEFAULT_UPDATE_CONFIG.
  */
-export async function fetchAppUpdateConfig(): Promise<AppUpdateConfig> {
+export async function fetchAppUpdateConfig(forceServer: boolean = false): Promise<AppUpdateConfig> {
   try {
     const docRef = doc(db, "config", "app_update");
-    const docSnap = await getDoc(docRef);
+    let docSnap;
+
+    if (forceServer) {
+      try {
+        docSnap = await getDocFromServer(docRef);
+      } catch (serverErr) {
+        console.warn("[Updates] getDocFromServer failed, falling back to cache/default:", serverErr);
+        docSnap = await getDoc(docRef);
+      }
+    } else {
+      docSnap = await getDoc(docRef);
+    }
+
     if (docSnap.exists()) {
       return docSnap.data() as AppUpdateConfig;
     } else {

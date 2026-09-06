@@ -26,6 +26,7 @@ export interface Ayah {
   hizbQuarter: number;
   sajda: boolean;
   translation?: string;
+  transliteration?: string;
 }
 
 export interface SurahDetail extends Surah {
@@ -68,19 +69,22 @@ export const fetchSurahDetail = async (surahNumber: number, edition: string = 'e
       return JSON.parse(cachedData);
     }
 
-    // Fetch Arabic and translation in parallel
-    const [arabicRes, translationRes] = await Promise.all([
+    // Fetch Arabic, translation, and transliteration in parallel
+    const [arabicRes, translationRes, transliterationRes] = await Promise.all([
       axios.get(`${BASE_URL}/surah/${surahNumber}/quran-indopak`),
-      axios.get(`${BASE_URL}/surah/${surahNumber}/${edition}`)
+      axios.get(`${BASE_URL}/surah/${surahNumber}/${edition}`),
+      axios.get(`${BASE_URL}/surah/${surahNumber}/en.transliteration`).catch(() => ({ data: { data: { ayahs: [] } } }))
     ]);
 
     const surahData = arabicRes.data.data;
     const translationData = translationRes.data.data;
+    const transliterationData = transliterationRes.data?.data;
 
-    // Merge translation into ayahs
+    // Merge translation & transliteration into ayahs
     const ayahsWithTranslation = surahData.ayahs.map((ayah: any, index: number) => ({
       ...ayah,
-      translation: translationData.ayahs[index].text
+      translation: translationData.ayahs[index]?.text || '',
+      transliteration: transliterationData?.ayahs?.[index]?.text || ''
     }));
 
     const result = {
@@ -118,6 +122,7 @@ export interface MushafAyah {
   ruku?: number;
   surahRuku?: number;
   translation?: string;
+  transliteration?: string;
   surah: {
     number: number;
     name: string;
@@ -196,16 +201,18 @@ export const fetchQuranPage = async (pageNumber: number, translationEdition: str
       return enrichMushafPage(page, surahList, startRukus);
     }
 
-    // Fetch Indo-Pak Arabic text and translation in parallel
-    const [arabicRes, translationRes] = await Promise.all([
+    // Fetch Indo-Pak Arabic text, translation, and transliteration in parallel
+    const [arabicRes, translationRes, transliterationRes] = await Promise.all([
       axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/quran-indopak`),
-      axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/${translationEdition}`)
+      axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/${translationEdition}`),
+      axios.get(`https://api.alquran.cloud/v1/page/${pageNumber}/en.transliteration`).catch(() => ({ data: { data: { ayahs: [] } } }))
     ]);
 
     const arabicAyahs = arabicRes.data.data.ayahs;
     const translationAyahs = translationRes.data.data.ayahs;
+    const transliterationAyahs = transliterationRes.data?.data?.ayahs || [];
 
-    // Merge Arabic & translation by index (saving ONLY surahNumber to save space)
+    // Merge Arabic, translation & transliteration by index
     const mergedAyahs = arabicAyahs.map((ayah: any, index: number) => ({
       number: ayah.number,
       text: ayah.text,
@@ -214,6 +221,7 @@ export const fetchQuranPage = async (pageNumber: number, translationEdition: str
       page: ayah.page,
       ruku: ayah.ruku,
       translation: translationAyahs[index]?.text || '',
+      transliteration: transliterationAyahs[index]?.text || '',
       surahNumber: ayah.surah.number,
     }));
 
@@ -425,4 +433,44 @@ export const syncFullQuran = async (
     return false;
   }
 };
+
+export function stripBismillahIfPresent(text: string, surahNumber: number): string {
+  if (!text || surahNumber === 1 || surahNumber === 9) {
+    return text ? text.trim() : '';
+  }
+
+  const clean = (str: string) =>
+    str
+      .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D4-\u08E1\u08E3-\u08FF\u0640]/g, '')
+      .replace(/[إأآٱا]/g, 'ا')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const normalized = clean(text);
+  const target = "بسم الله الرحمن الرحيم";
+
+  if (normalized.startsWith(target)) {
+    let baseLetterCount = 0;
+    let cutoffIndex = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const cleanedChar = clean(char);
+      if (cleanedChar.length > 0) {
+        baseLetterCount++;
+      }
+      if (baseLetterCount === 19) {
+        cutoffIndex = i + 1;
+        break;
+      }
+    }
+
+    if (cutoffIndex !== -1) {
+      return text.slice(cutoffIndex).trim();
+    }
+  }
+
+  return text.trim();
+}
+
 

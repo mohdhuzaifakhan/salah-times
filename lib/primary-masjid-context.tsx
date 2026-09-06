@@ -16,7 +16,7 @@ import Colors from "@/constants/colors";
 import { QueryDocumentSnapshot } from "firebase/firestore";
 import { Masjid } from "./types";
 import { getAllMasjids, getPrimaryMasjidId, getCachedPrimaryMasjid, getMasjidById, savePrimaryMasjidId, getMasjidsPaginated } from "./store";
-import { schedulePrimaryMasjidNotifications, setupForegroundPrayerWatcher } from "./notifications";
+import { schedulePrimaryMasjidNotifications, refreshPrimaryMasjidNotifications, setupForegroundPrayerWatcher } from "./notifications";
 import { showCustomAlert } from "./custom-alert";
 import { useLocation } from "./location-context";
 
@@ -106,6 +106,8 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
           const newItems = res.masjids.filter((m) => !existingIds.has(m.id));
           return [...prev, ...newItems];
         });
+      }
+      if (res.lastDoc) {
         setModalLastDocSnap(res.lastDoc);
       }
       setModalHasMore(res.hasMore);
@@ -162,13 +164,18 @@ export const PrimaryMasjidProvider: React.FC<{ children: React.ReactNode }> = ({
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setPrimaryMasjidId(masjidId);
       
-      const selected = modalMasjids.find((m) => m.id === masjidId) || (await getMasjidById(masjidId));
+      let selected = modalMasjids.find((m) => m.id === masjidId) || masjids.find((m) => m.id === masjidId);
+      if (!selected) {
+        selected = (await getMasjidById(masjidId)) || undefined;
+      }
+
       if (selected) {
         setPrimaryMasjid(selected);
         await savePrimaryMasjidId(masjidId, selected);
         await schedulePrimaryMasjidNotifications(selected);
       } else {
         await savePrimaryMasjidId(masjidId);
+        await refreshPrimaryMasjidNotifications();
       }
       setShowSelectModal(false);
       setMasjidSearch("");

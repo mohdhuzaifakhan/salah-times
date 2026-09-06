@@ -45,6 +45,7 @@ export async function getMasjidsPaginated({
   searchQuery?: string;
   configuredCitiesSet?: Set<string>;
 }): Promise<PaginatedMasjidsResult> {
+  let querySucceeded = false;
   try {
     const masjidsRef = collection(db, MASJIDS_COLLECTION);
     const accumulatedMasjids: Masjid[] = [];
@@ -55,7 +56,7 @@ export async function getMasjidsPaginated({
     const cleanCity = city ? city.trim().toLowerCase() : null;
 
     let iterations = 0;
-    const maxIterations = 3;
+    const maxIterations = 20;
 
     while (accumulatedMasjids.length < pageSize && hasMoreDocsInDb && iterations < maxIterations) {
       iterations++;
@@ -89,6 +90,7 @@ export async function getMasjidsPaginated({
         break;
       }
 
+      querySucceeded = true;
       const docs = querySnapshot.docs;
       if (docs.length < fetchBatchSize) {
         hasMoreDocsInDb = false;
@@ -128,8 +130,10 @@ export async function getMasjidsPaginated({
       }
     }
 
-    if (accumulatedMasjids.length > 0) {
-      void getAllMasjids();
+    if (querySucceeded) {
+      if (accumulatedMasjids.length > 0) {
+        void getAllMasjids();
+      }
       return {
         masjids: accumulatedMasjids,
         lastDoc: currentLastDoc,
@@ -165,10 +169,22 @@ export async function getMasjidsPaginated({
         return matchesCity && matchesSearch;
       });
 
+      let startIndex = 0;
+      if (lastDoc && lastDoc.id) {
+        const idx = filtered.findIndex((m) => m.id === lastDoc.id);
+        if (idx !== -1) {
+          startIndex = idx + 1;
+        }
+      }
+
+      const pagedSlice = filtered.slice(startIndex, startIndex + pageSize);
+      const hasMore = (startIndex + pagedSlice.length) < filtered.length;
+      const newLastDoc: any = pagedSlice.length > 0 ? { id: pagedSlice[pagedSlice.length - 1].id } : lastDoc;
+
       return {
-        masjids: filtered.slice(0, pageSize),
-        lastDoc: null,
-        hasMore: false,
+        masjids: pagedSlice,
+        lastDoc: newLastDoc,
+        hasMore,
       };
     }
   } catch (cacheErr) {

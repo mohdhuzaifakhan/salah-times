@@ -36,7 +36,8 @@ export const translations = {
     no_results: 'No results found',
     announcements: 'Announcements',
     prayer_timetable: 'Prayer Timetable',
-    notifications: 'Notifications',
+    notifications: 'Alarm Settings',
+    alarm_settings: 'Alarm Settings',
     appearance: 'Appearance',
     about_us: 'About Us',
     rate_app: 'Rate the App',
@@ -44,6 +45,7 @@ export const translations = {
     logout: 'Logout',
     app_section: 'App',
     support_section: 'Support',
+    contact_us: 'Contact Us',
   },
   hi: {
     prayer_times: 'नमाज़ का समय',
@@ -80,7 +82,8 @@ export const translations = {
     no_results: 'कोई परिणाम नहीं मिला',
     announcements: 'घोषणाएं',
     prayer_timetable: 'नमाज़ का समय सारणी',
-    notifications: 'सूचनाएं',
+    notifications: 'अलार्म सेटिंग्स',
+    alarm_settings: 'अलार्म सेटिंग्स',
     appearance: 'दिखावट',
     about_us: 'हमारे बारे में',
     rate_app: 'ऐप को रेट करें',
@@ -88,6 +91,7 @@ export const translations = {
     logout: 'लॉग आउट',
     app_section: 'ऐप',
     support_section: 'सहयोग',
+    contact_us: 'संपर्क करें',
   },
   ur: {
     prayer_times: 'نماز کے اوقات',
@@ -124,7 +128,8 @@ export const translations = {
     no_results: 'کوئی نتیجہ نہیں ملا',
     announcements: 'اعلانات',
     prayer_timetable: 'نماز کا ٹائم ٹیبل',
-    notifications: 'اطلاعات',
+    notifications: 'الارم سیٹنگز',
+    alarm_settings: 'الارم سیٹنگز',
     appearance: 'ظاہری شکل',
     about_us: 'ہمارے بارے میں',
     rate_app: 'ایپ کی درجہ بندی کریں',
@@ -132,5 +137,6 @@ export const translations = {
     logout: 'لاگ آؤٹ',
     app_section: 'ایپ',
     support_section: 'تعاون',
+    contact_us: 'رابطہ کریں',
   }
 };

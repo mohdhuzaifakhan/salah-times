@@ -5,13 +5,14 @@ import notifee, {
   EventType,
   TriggerType,
 } from "@notifee/react-native";
+import { Audio } from "expo-av";
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync as setAudioModeAsyncExpoAudio } from "expo-audio";
-import { Platform } from "react-native";
+import { Image, Platform } from "react-native";
 import { getAlarmSettings, PrayerKey } from "./alarm-settings";
 import { getMasjidById, getPrimaryMasjidId } from "./store";
 import { Masjid } from "./types";
 
-const LOCAL_AZAAN_ASSET = require("../assets/sounds/Ghalwash.mp3");
+const LOCAL_AZAAN_ASSET = require("../assets/sounds/Sharif-Doman.mp3");
 
 interface AlarmState {
   isPlaying: boolean;
@@ -20,6 +21,7 @@ interface AlarmState {
   offsetMinutes?: number;
 }
 
+let activeSound: Audio.Sound | null = null;
 let activePlayer: AudioPlayer | null = null;
 let alarmTimeout: ReturnType<typeof setTimeout> | number | null = null;
 const alarmSubscribers: Array<(state: AlarmState) => void> = [];
@@ -45,13 +47,39 @@ export async function stopPrayerAlarm() {
     clearTimeout(alarmTimeout);
     alarmTimeout = null;
   }
-  if (activePlayer) {
+
+  if (activeSound) {
+    const soundToStop = activeSound;
+    activeSound = null;
     try {
-      activePlayer.pause();
+      await soundToStop.stopAsync();
     } catch {
-      // Ignore cleanup errors
+      // Ignore stop errors
     }
+    try {
+      await soundToStop.unloadAsync();
+    } catch {
+      // Ignore unload errors
+    }
+  }
+
+  if (activePlayer) {
+    const playerToStop = activePlayer;
     activePlayer = null;
+    try {
+      playerToStop.pause();
+    } catch {
+      // Ignore pause errors
+    }
+    try {
+      if (typeof (playerToStop as any).release === "function") {
+        (playerToStop as any).release();
+      } else if (typeof (playerToStop as any).remove === "function") {
+        (playerToStop as any).remove();
+      }
+    } catch {
+      // Ignore release errors
+    }
   }
 
   try {
@@ -65,8 +93,8 @@ export async function stopPrayerAlarm() {
 }
 
 /**
- * Triggers a 30-second Azaan audio ringtone when a prayer notification arrives in foreground or user opens app.
- * Instantly opens the popup modal and plays bundled Azaan audio through speaker.
+ * Triggers a 30-second Azaan audio ringtone when a prayer notification arrives at prayer time.
+ * Instantly opens the popup modal and plays bundled Azaan audio through speaker for 30s or until manually stopped.
  */
 export async function triggerPrayerAlarm(
   prayerName: string = "Namaaz",
@@ -78,39 +106,65 @@ export async function triggerPrayerAlarm(
   // 1. Immediately open UI popup modal (0ms delay)
   notifyAlarmSubscribers({ isPlaying: true, prayerName, masjidName, offsetMinutes });
 
-  // 2. Set automatic 30s stop timeout
+  // 2. Set automatic 30s stop timeout (auto-closes popup and stops audio after 30 seconds)
   alarmTimeout = setTimeout(() => {
     void stopPrayerAlarm();
   }, 30000);
 
-  // 3. Configure audio session
+  // 3. Play audio session via expo-av (primary) with fallback to expo-audio
   try {
-    await setAudioModeAsyncExpoAudio({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: false,
     });
-  } catch (err) {
-    console.warn("[Notifications] expo-audio setAudioModeAsync error:", err);
-  }
 
-  // 4. Play local bundled Azaan sound asset directly with expo-audio
-  try {
-    const player = createAudioPlayer(LOCAL_AZAAN_ASSET);
-    player.loop = false;
-    player.volume = 1.0;
-    player.play();
-    activePlayer = player;
+    const { sound } = await Audio.Sound.createAsync(
+      LOCAL_AZAAN_ASSET,
+      { shouldPlay: true, volume: 1.0, isLooping: false }
+    );
+    activeSound = sound;
+    await sound.playAsync();
   } catch (err) {
-    console.warn("[Notifications] expo-audio play error:", err);
+    console.warn("[Notifications] expo-av Audio play error:", err);
+
+    // Fallback to expo-audio using resolved asset URI
+    try {
+      await setAudioModeAsyncExpoAudio({
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+      });
+      const resolvedAsset = Image.resolveAssetSource(LOCAL_AZAAN_ASSET);
+      const audioSource = resolvedAsset?.uri ? resolvedAsset.uri : LOCAL_AZAAN_ASSET;
+      const player = createAudioPlayer(audioSource);
+      player.loop = false;
+      player.volume = 1.0;
+      player.play();
+      activePlayer = player;
+    } catch (fallbackErr) {
+      console.warn("[Notifications] expo-audio play error:", fallbackErr);
+    }
   }
 }
 
 /**
  * Ensures high-priority Android notification channels are created for Azaan, Default, and Silent alarms.
  */
+/**
+ * Ensures high-priority Android notification channels are created for Azaan, Default, and Silent alarms.
+ */
 async function ensureAndroidChannels() {
   if (Platform.OS === "android") {
-    // 1. High priority channel with native Azaan sound (azaan.mp3 in res/raw)
+    // Delete existing channels to ensure updated settings (sound, importance, DND bypass) take effect
+    try {
+      await notifee.deleteChannel("azaan-alarm");
+      await notifee.deleteChannel("default-alarm");
+      await notifee.deleteChannel("silent-alarm");
+    } catch {
+      // Ignore channel deletion errors if channels don't exist yet
+    }
+
+    // 1. High priority channel with controlled Azaan audio
     await notifee.createChannel({
       id: "azaan-alarm",
       name: "Prayer Alarm (Azaan)",
@@ -121,7 +175,6 @@ async function ensureAndroidChannels() {
       vibration: true,
       lights: true,
       bypassDnd: true,
-      sound: "azaan",
       visibility: AndroidVisibility.PUBLIC,
     });
 
@@ -236,14 +289,16 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
     try {
       const settings = await getAlarmSettings();
 
-      // Cancel only previous scheduled prayer trigger notifications (preserve admin/event notifs)
+      // Cancel previous scheduled prayer trigger notifications completely
       try {
         const existingIds = await notifee.getTriggerNotificationIds();
         for (const id of existingIds) {
           if (id.startsWith("prayer_")) {
             await notifee.cancelTriggerNotification(id);
+            await notifee.cancelNotification(id);
           }
         }
+        await notifee.cancelDisplayedNotifications();
       } catch (err) {
         console.warn("[Notifications] Error clearing existing trigger IDs:", err);
       }
@@ -350,6 +405,10 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
                     channelId,
                     importance: AndroidImportance.HIGH,
                     vibrationPattern: settings.vibrate ? [500, 250, 500, 250] : undefined,
+                    fullScreenAction: {
+                      id: "default",
+                      launchActivity: "default",
+                    },
                     pressAction: {
                       id: "default",
                       launchActivity: "default",
@@ -360,7 +419,8 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
                         pressAction: { id: "stop" },
                       },
                     ],
-                    autoCancel: true,
+                    autoCancel: false,
+                    ongoing: true,
                   },
                 },
                 {
@@ -405,7 +465,15 @@ export function setupForegroundPrayerWatcher(_getPrimaryMasjid: () => Masjid | n
 export async function handleNotifeeBackgroundEvent(event: Event) {
   const { type, detail } = event;
 
-  if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
+  if (type === EventType.DELIVERED || type === EventType.PRESS) {
+    const data = detail.notification?.data;
+    if (data?.isPrayerAlarm === "true") {
+      const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
+      const masjidName = typeof data.masjidName === "string" ? data.masjidName : "";
+      const offsetMinutes = Number(data.offsetMinutes) || 0;
+      await triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
+    }
+  } else if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
     await stopPrayerAlarm();
   }
 }
@@ -466,11 +534,14 @@ export async function clearScheduledNotifications() {
     for (const id of existingIds) {
       if (id.startsWith("prayer_")) {
         await notifee.cancelTriggerNotification(id);
+        await notifee.cancelNotification(id);
       }
     }
+    await notifee.cancelDisplayedNotifications();
     await stopPrayerAlarm();
   } catch (error) {
     console.error("[Notifications] Failed to clear notifications:", error);
   }
 }
+
 

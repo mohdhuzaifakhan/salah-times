@@ -201,6 +201,8 @@ export default function ExploreScreen() {
           const newItems = result.masjids.filter((m) => !existingIds.has(m.id));
           return [...prev, ...newItems];
         });
+      }
+      if (result.lastDoc) {
         setLastDocSnap(result.lastDoc);
       }
       setHasMore(result.hasMore);

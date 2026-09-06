@@ -1,12 +1,14 @@
 import AyahBottomSheet from '@/components/quran/AyahBottomSheet';
+import { CalligraphySettingsModal } from '@/components/quran/CalligraphySettingsModal';
 import Colors from '@/constants/colors';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { useLanguage } from '@/lib/language-context';
-import { fetchQuranPage, getAudioUrl, MushafAyah, MushafPage } from '@/lib/quran/api';
+import { fetchQuranPage, getAudioUrl, MushafAyah, MushafPage, stripBismillahIfPresent } from '@/lib/quran/api';
 import { PARAH_LIST, SURA_START_PAGES } from '@/lib/quran/constants';
-import { useQuran } from '@/lib/quran/context';
+import { useQuran, QuranScriptFont, QuranLineSpacing } from '@/lib/quran/context';
 import { addBookmark, removeBookmark } from '@/lib/quran/db';
 import { Ionicons } from '@expo/vector-icons';
+import { Type } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -29,6 +31,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 const PAGES_ARRAY = Array.from({ length: 604 }, (_, i) => i + 1);
+
+const SCRIPT_FONT_FAMILY_MAP: Record<QuranScriptFont, string> = {
+  amiri: 'Amiri_400Regular',
+  scheherazade: 'ScheherazadeNew_400Regular',
+  lateef: 'Lateef_400Regular',
+};
+
+const LINE_SPACING_MULTIPLIER_MAP: Record<QuranLineSpacing, number> = {
+  compact: 1.7,
+  normal: 2.1,
+  relaxed: 2.5,
+};
 
 // Helper functions for header lookup
 const getSurahForPage = (page: number) => {
@@ -55,36 +69,6 @@ const getCurrentParah = (page: number) => {
   return activeParah;
 };
 
-const normalizeArabicForMatch = (str: string) =>
-  str
-    .replace(/[\u064B-\u065F\u0610-\u061A\u06D6-\u06ED\u08D4-\u08E1\u08E3-\u08FF\u0670]/g, '')
-    .replace(/[إأآٱا]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const BISMILLAH_NORMALIZED = normalizeArabicForMatch('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ');
-
-const stripBismillahIfPresent = (text: string, surahNumber: number) => {
-  if (surahNumber === 1 || surahNumber === 9) return text.trim();
-
-  let normalized = '';
-  let cutIndex = -1;
-
-  for (let i = 0; i < text.length; i++) {
-    normalized += normalizeArabicForMatch(text[i]);
-    if (normalized.trim().length >= BISMILLAH_NORMALIZED.length) {
-      cutIndex = i + 1;
-      break;
-    }
-  }
-  if (cutIndex === -1) return text.trim();
-
-  const candidate = normalizeArabicForMatch(text.slice(0, cutIndex));
-  return candidate === BISMILLAH_NORMALIZED ? text.slice(cutIndex).trim() : text.trim();
-};
-
 const toArabicDigits = (num: number) => {
   const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
   return num.toString().split('').map(digit => arabicDigits[parseInt(digit)]).join('');
@@ -97,6 +81,8 @@ const MushafPageItem = React.memo(({
   onAyahTap,
   selectedAyah,
   fontSize,
+  scriptFont = 'scheherazade',
+  lineSpacing = 'normal',
   onPagePress
 }: {
   pageNumber: number;
@@ -104,6 +90,8 @@ const MushafPageItem = React.memo(({
   onAyahTap: (ayah: MushafAyah) => void;
   selectedAyah: MushafAyah | null;
   fontSize: number;
+  scriptFont?: QuranScriptFont;
+  lineSpacing?: QuranLineSpacing;
   onPagePress: () => void;
 }) => {
   const [loading, setLoading] = useState<boolean>(true);
@@ -233,22 +221,17 @@ const MushafPageItem = React.memo(({
                           </View>
                           <View style={styles.bannerOrnamentRight} />
                         </View>
-                        {/* Centered Bismillah Header (Not for Surah 1 or 9) */}
-                        {firstAyah.surah.number !== 1 && firstAyah.surah.number !== 9 && (
-                          <Text style={styles.bismillahText}>بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</Text>
-                        )}
                       </View>
                     )}
                     <View style={styles.surahTextContainer}>
                       {(() => {
+                        const fontFamily = SCRIPT_FONT_FAMILY_MAP[scriptFont] || 'ScheherazadeNew_400Regular';
+                        const spacingMultiplier = LINE_SPACING_MULTIPLIER_MAP[lineSpacing] || 2.1;
                         const displayFontSize = Math.min(24, (fontSize * 0.95) + 3);
-                        const displayLineHeight = displayFontSize * 2.1;
+                        const displayLineHeight = displayFontSize * spacingMultiplier;
 
                         const fullSurahText = surahAyahs.map((item, index) => {
-                          let textToRender = item.text.replace(/[\r\n]+/g, ' ').trim();
-                          if (item.numberInSurah === 1) {
-                            textToRender = stripBismillahIfPresent(textToRender, item.surah.number);
-                          }
+                          const textToRender = item.text.replace(/[\r\n]+/g, ' ').trim();
 
                           const isLastAyahOfSurah = item.numberInSurah === item.surah.numberOfAyahs;
                           const isRukuFinished = (() => {
@@ -272,7 +255,7 @@ const MushafPageItem = React.memo(({
                         const parts = fullSurahText.split(allahRegex);
 
                         return (
-                          <Text style={[styles.quranTextParagraph, { fontSize: displayFontSize, lineHeight: displayLineHeight }]}>
+                          <Text style={[styles.quranTextParagraph, { fontFamily, fontSize: displayFontSize, lineHeight: displayLineHeight }]}>
                             {parts.map((part, idx) => {
                               allahRegex.lastIndex = 0;
                               return allahRegex.test(part)
@@ -305,8 +288,9 @@ export default function MushafScreen() {
   const [bottomSheetVisible, setBottomSheetVisible] = useState<boolean>(false);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
 
-  // Custom Surah Dropdown selector state
+  // Custom Surah Dropdown & Calligraphy Modal state
   const [showSurahModal, setShowSurahModal] = useState<boolean>(false);
+  const [showCalligraphyModal, setShowCalligraphyModal] = useState<boolean>(false);
   const [surahSearch, setSurahSearch] = useState<string>('');
 
   const { preferences, bookmarks, pageBookmarks, togglePageBookmark, updateLastReadPage, refreshBookmarks } = useQuran();
@@ -477,6 +461,14 @@ export default function MushafScreen() {
             <Ionicons name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
+          {/* Calligraphy & Script Settings Button */}
+          <TouchableOpacity
+            onPress={() => setShowCalligraphyModal(true)}
+            style={styles.iconButton}
+          >
+            <Type size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+
           {/* Mode Switcher: Mushaf vs Translation */}
           <View style={styles.headerModeSwitch}>
             <TouchableOpacity style={[styles.headerModeBtn, styles.headerModeBtnActive]}>
@@ -508,6 +500,8 @@ export default function MushafScreen() {
             onAyahTap={handleAyahTap}
             selectedAyah={selectedAyah}
             fontSize={preferences.fontSize}
+            scriptFont={preferences.scriptFont}
+            lineSpacing={preferences.lineSpacing}
             onPagePress={toggleFullScreen}
           />
         )}
@@ -547,6 +541,12 @@ export default function MushafScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Calligraphy & Reading Settings Modal */}
+      <CalligraphySettingsModal
+        visible={showCalligraphyModal}
+        onClose={() => setShowCalligraphyModal(false)}
+      />
 
       {/* Surah Dropdown Selector Modal */}
       <Modal visible={showSurahModal} animationType="slide" transparent={true}>
@@ -703,24 +703,24 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.primary,
     margin: 2,
-    padding: 8,
+    padding: 6,
     borderRadius: 14,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   quranContent: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-    paddingHorizontal: 0,
+    paddingHorizontal: 3,
   },
   surahBannerContainer: {
     width: '100%',
     alignItems: 'center',
-    marginVertical: 12,
+    marginVertical: 8,
   },
   surahBannerCard: {
     flexDirection: 'row',
@@ -766,13 +766,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: Colors.text,
     textAlign: 'center',
-    marginTop: 14,
-    marginBottom: 8,
+    marginTop: 10,
+    marginBottom: 6,
   },
   arabicParagraph: {
     writingDirection: 'rtl',
     textAlign: 'center',
-    marginVertical: 4,
+    marginVertical: 2,
   },
   ayahTextSegment: {
     fontFamily: 'Amiri_400Regular',
@@ -781,12 +781,12 @@ const styles = StyleSheet.create({
   },
   surahGroup: {
     width: '100%',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   surahTextContainer: {
     width: '100%',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     backgroundColor: Colors.background,
   },
   quranTextParagraph: {
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textAlign: 'justify',
     writingDirection: 'rtl',
-    includeFontPadding: false,
+    paddingHorizontal: 4,
   },
   ayahInlineText: {
     fontFamily: 'Amiri_400Regular',

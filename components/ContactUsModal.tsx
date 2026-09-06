@@ -240,8 +240,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 20,
-    fontWeight: '700',
     color: Colors.text,
   },
   closeBtn: {
@@ -253,6 +253,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   subtitle: {
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     color: Colors.textSecondary,
     marginBottom: 16,
@@ -266,8 +267,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 13,
-    fontWeight: '600',
     color: Colors.text,
   },
   inputWrapper: {
@@ -283,6 +284,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   input: {
+    fontFamily: 'Poppins_400Regular',
     flex: 1,
     height: 48,
     fontSize: 14,
@@ -314,8 +316,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
     color: Colors.textSecondary,
   },
   submitBtn: {
@@ -331,8 +333,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   submitBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
     color: '#FFFFFF',
   },
 });

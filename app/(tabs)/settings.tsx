@@ -1,23 +1,24 @@
-import { ContactUsModal } from '@/components/ContactUsModal';
+import { AboutUsModal } from '@/components/AboutUsModal';
 import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+import AppUpdateModal from '@/components/AppUpdateModal';
+import { ContactUsModal } from '@/components/ContactUsModal';
 import { PrayerAlarmSettingsModal } from '@/components/PrayerAlarmSettingsModal';
+import { ShareAppModal } from '@/components/ShareAppModal';
 import Colors from '@/constants/colors';
 import { showCustomAlert } from '@/lib/custom-alert';
 import { auth } from '@/lib/firebaseConfig';
 import { useHadith } from '@/lib/hadith/context';
 import { useLanguage } from '@/lib/language-context';
 import { useLocation } from '@/lib/location-context';
-import { triggerPrayerAlarm } from '@/lib/notifications';
 import { usePrimaryMasjid } from '@/lib/primary-masjid-context';
 import { useQuran } from '@/lib/quran/context';
 import { Language } from '@/lib/translations';
-import { compareVersions, CURRENT_VERSION, fetchAppUpdateConfig, openPlayStore } from '@/lib/updates';
+import { AppUpdateConfig, compareVersions, CURRENT_VERSION, fetchAppUpdateConfig } from '@/lib/updates';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import React, { useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
@@ -30,37 +31,48 @@ export default function SettingsScreen() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [alarmSettingsModalVisible, setAlarmSettingsModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [aboutModalVisible, setAboutModalVisible] = useState(false);
+  const [updateModalState, setUpdateModalState] = useState<{
+    visible: boolean;
+    config: AppUpdateConfig | null;
+    isForced: boolean;
+  }>({
+    visible: false,
+    config: null,
+    isForced: false,
+  });
 
   const handleManualUpdateCheck = async () => {
     if (checkingUpdate) return;
     setCheckingUpdate(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const config = await fetchAppUpdateConfig();
+      // Force fetch latest real data directly from Firestore server to bypass stale cache
+      const config = await fetchAppUpdateConfig(true);
+      if (!config.enabled) {
+        showCustomAlert("Updates Disabled", "App update checks are currently disabled by server configuration.");
+        return;
+      }
+
+      const isForced = compareVersions(CURRENT_VERSION, config.minVersion) < 0;
       const updateAvailable = compareVersions(CURRENT_VERSION, config.latestVersion) < 0;
-      if (updateAvailable) {
-        showCustomAlert(
-          "New Update Available",
-          `Version ${config.latestVersion} is available. Release notes:\n\n${config.releaseNotes.map(n => `• ${n}`).join('\n')}`,
-          [
-            { text: "Later", style: "cancel" },
-            {
-              text: "Update Now",
-              onPress: () => {
-                void openPlayStore(config.playStoreUrl);
-              }
-            }
-          ]
-        );
+
+      if (updateAvailable || isForced) {
+        setUpdateModalState({
+          visible: true,
+          config,
+          isForced,
+        });
       } else {
         showCustomAlert(
           "Up to Date",
-          `Salah Times is up to date!\n\nCurrent version: v${CURRENT_VERSION}`
+          `Salah Times is up to date!\n\nCurrent version: v${CURRENT_VERSION}\nLatest server release: v${config.latestVersion}`
         );
       }
     } catch (error) {
       console.error("Manual update check failed:", error);
-      showCustomAlert("Check Failed", "Unable to check for updates at this time. Please try again later.");
+      showCustomAlert("Check Failed", "Unable to check for updates at this time. Please check your network connection.");
     } finally {
       setCheckingUpdate(false);
     }
@@ -78,32 +90,8 @@ export default function SettingsScreen() {
   };
 
   const handleAbout = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    showCustomAlert(
-      t('about_us'),
-      'Salah Time App v1.0.0\n\nA comprehensive Islamic companion for prayer times and Quran.\n\nDeveloped with ❤️ for the Ummah.',
-      [
-        {
-          text: 'Contact Developer',
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Linking.openURL('mailto:mohdhuzaifa8126195456@gmail.com?subject=Salah%20Times%20Feedback').catch(err => {
-              console.error("Failed to open mail link:", err);
-            });
-          }
-        },
-        {
-          text: 'Visit Website',
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Linking.openURL('https://mohdhuzaifakhan.github.io/huzaifa-portfolio/').catch(err => {
-              console.error("Failed to open website link:", err);
-            });
-          }
-        },
-        { text: 'OK', style: 'cancel' }
-      ]
-    );
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAboutModalVisible(true);
   };
 
   const handleRate = () => {
@@ -115,14 +103,9 @@ export default function SettingsScreen() {
     });
   };
 
-  const handleShareApp = async () => {
-    try {
-      await Share.share({
-        message: `Assalamu Alaikum! Download the Salah Times app to track active masjid prayer times, read Quran, and view the Islamic calendar: https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes`,
-      });
-    } catch (error) {
-      console.error("Share failed:", error);
-    }
+  const handleShareApp = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShareModalVisible(true);
   };
 
   const handleNotifications = () => {
@@ -157,7 +140,7 @@ export default function SettingsScreen() {
           <Text style={styles.title}>{t('settings')}</Text>
         </View>
 
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('quran')}</Text>
 
           <SettingItem
@@ -202,7 +185,7 @@ export default function SettingsScreen() {
               </View>
             }
           />
-        </View>
+        </View> */}
 
         {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('hadith')}</Text>
@@ -263,19 +246,14 @@ export default function SettingsScreen() {
           />
         </View> */}
 
+        {/* 1. Namaz & Masjid Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('app_section')}</Text>
           <SettingItem
-            icon="location-outline"
-            title="App Location"
-            subtitle={selectedCity ? `${selectedCity}, ${selectedState || ""}` : "Not Selected"}
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              openLocationModal();
-            }}
-            rightElement={
-              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-            }
+            icon="notifications-outline"
+            title={t('alarm_settings')}
+            subtitle="Manage prayer alerts & Azaan sound"
+            onPress={handleNotifications}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
           <SettingItem
             icon="star-outline"
@@ -290,34 +268,56 @@ export default function SettingsScreen() {
             }
           />
           <SettingItem
-            icon="notifications-outline"
-            title={t('notifications')}
-            subtitle="Manage prayer alerts"
-            onPress={handleNotifications}
-            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
-          />
-          <SettingItem
-            icon="color-palette-outline"
-            title={t('appearance')}
-            subtitle="Light Mode"
-            onPress={() => showCustomAlert(t('appearance'), 'Dark mode coming soon!')}
-            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
-          />
-          <SettingItem
-            icon="cloud-download-outline"
-            title="Check for Updates"
-            subtitle="Keep your app up to date"
-            onPress={handleManualUpdateCheck}
+            icon="location-outline"
+            title="App Location"
+            subtitle={selectedCity ? `${selectedCity}, ${selectedState || ""}` : "Not Selected"}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              openLocationModal();
+            }}
             rightElement={
-              checkingUpdate ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
-              ) : (
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-              )
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
             }
           />
         </View>
 
+        {/* 2. Support & About Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('support_section')}</Text>
+          <SettingItem
+            icon="mail-outline"
+            title={t('contact_us')}
+            subtitle="Report issues or send feedback"
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setContactModalVisible(true);
+            }}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="information-circle-outline"
+            title={t('about_us')}
+            subtitle={`Version ${CURRENT_VERSION}`}
+            onPress={handleAbout}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="heart-outline"
+            title={t('rate_app')}
+            subtitle="Support us on Play Store"
+            onPress={handleRate}
+            rightElement={<Ionicons name="open-outline" size={20} color={Colors.textMuted} />}
+          />
+          <SettingItem
+            icon="share-social-outline"
+            title={t('share_app')}
+            subtitle="Share with family & friends"
+            onPress={handleShareApp}
+            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+          />
+        </View>
+
+        {/* 3. Preferences & App Updates */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('language')}</Text>
           <View style={styles.langContainer}>
@@ -341,43 +341,26 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* <View style={styles.section}>
-          <NativeHadithAdCard
-            headline="Learn Arabic with Al-Quran Academy"
-            body="Understand the vocabulary of the Holy Quran with bite-sized daily lessons and quizzes."
-            callToAction="Get 7 Days Free"
-          />
-        </View> */}
-
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('support_section')}</Text>
           <SettingItem
-            icon="heart-outline"
-            title={t('about_us')}
-            onPress={handleAbout}
+            icon="color-palette-outline"
+            title={t('appearance')}
+            subtitle="Light Mode"
+            onPress={() => showCustomAlert(t('appearance'), 'Dark mode coming soon!')}
             rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
           />
           <SettingItem
-            icon="call-outline"
-            title="Contact Us"
-            subtitle="Send phone number & message to support"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setContactModalVisible(true);
-            }}
-            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
-          />
-          <SettingItem
-            icon="star-outline"
-            title={t('rate_app')}
-            onPress={handleRate}
-            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
-          />
-          <SettingItem
-            icon="share-social-outline"
-            title={t('share_app')}
-            onPress={handleShareApp}
-            rightElement={<Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />}
+            icon="cloud-download-outline"
+            title="Check for Updates"
+            subtitle={`v${CURRENT_VERSION} • Tap to check for updates`}
+            onPress={handleManualUpdateCheck}
+            rightElement={
+              checkingUpdate ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              )
+            }
           />
         </View>
 
@@ -399,6 +382,22 @@ export default function SettingsScreen() {
         visible={contactModalVisible}
         onClose={() => setContactModalVisible(false)}
       />
+      <ShareAppModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+      />
+      <AboutUsModal
+        visible={aboutModalVisible}
+        onClose={() => setAboutModalVisible(false)}
+      />
+      {updateModalState.config && (
+        <AppUpdateModal
+          visible={updateModalState.visible}
+          config={updateModalState.config}
+          isForced={updateModalState.isForced}
+          onClose={() => setUpdateModalState(prev => ({ ...prev, visible: false }))}
+        />
+      )}
       <PremiumBannerAd inTabBar={true} />
     </SafeAreaView>
   );
