@@ -17,8 +17,8 @@ import HadithBookCard from '@/components/hadith/HadithBookCard';
 import { useHadith } from '@/lib/hadith/context';
 import { useLanguage } from '@/lib/language-context';
 import { HadithSkeleton } from '@/components/Skeleton';
-import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
-import { NativeHadithAdCard } from '@/components/ads/NativeHadithAdCard';
+// import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+// import { NativeHadithAdCard } from '@/components/ads/NativeHadithAdCard';
 
 const HadithHeader = React.memo(({ search, setSearch, dailyHadith, recentRead, t }: any) => (
   <View style={styles.header}>
@@ -96,16 +96,9 @@ export default function HadithHomeScreen() {
     );
   }, [search]);
 
+  // Ads disabled for now
   const booksWithAds = useMemo(() => {
-    const result: (HadithBook | { isAd: true; slug: string })[] = [];
-    filteredBooks.forEach((item, index) => {
-      result.push(item);
-      // Inject native ad after the second book card
-      if (index === 1) {
-        result.push({ isAd: true, slug: `ad-${item.slug}` });
-      }
-    });
-    return result;
+    return filteredBooks;
   }, [filteredBooks]);
 
   if (loading) {
@@ -125,9 +118,9 @@ export default function HadithHomeScreen() {
           data={booksWithAds}
           keyExtractor={(item) => item.slug}
           renderItem={({ item }) => {
-            if ('isAd' in item) {
-              return <NativeHadithAdCard />;
-            }
+            // if ('isAd' in item) {
+            //   return <NativeHadithAdCard />;
+            // }
             return (
               <HadithBookCard
                 book={item}
@@ -149,7 +142,7 @@ export default function HadithHomeScreen() {
           ListFooterComponent={<View style={{ height: 140 }} />}
         />
       </View>
-      <PremiumBannerAd inTabBar={true} />
+      {/* <PremiumBannerAd inTabBar={true} /> */}
     </SafeAreaView>
   );
 }

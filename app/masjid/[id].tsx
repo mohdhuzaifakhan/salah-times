@@ -23,6 +23,7 @@ import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
 import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
+import { MasjidQRModal } from "@/components/MasjidQRModal";
 
 function formatTime(time: string): string {
   if (!time || !time.includes(":")) return "--:--";
@@ -43,6 +44,7 @@ export default function MasjidDetailScreen() {
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [showQRModal, setShowQRModal] = useState(false);
   const isPrimary = primaryMasjidId === id;
 
   useEffect(() => {
@@ -174,29 +176,55 @@ export default function MasjidDetailScreen() {
             <Text style={styles.address}>{masjid.address}, {masjid.city}</Text>
           </View>
           
-          <Pressable
-            style={({ pressed }) => [
-              styles.setPrimaryHeroBtn,
-              isPrimary ? styles.setPrimaryHeroBtnActive : null,
-              pressed && styles.btnPressed
-            ]}
-            onPress={togglePrimary}
-          >
-            <Ionicons
-              name={isPrimary ? "star" : "star-outline"}
-              size={15}
-              color={isPrimary ? "#fff" : Colors.primary}
-            />
-            <Text
-              style={[
-                styles.setPrimaryHeroBtnText,
-                isPrimary ? styles.setPrimaryHeroBtnTextActive : null
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 16 }}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.setPrimaryHeroBtn,
+                isPrimary ? styles.setPrimaryHeroBtnActive : null,
+                pressed && styles.btnPressed,
+                { marginTop: 0 }
               ]}
+              onPress={togglePrimary}
             >
-              {isPrimary ? "Primary Masjid (Selected)" : "Set as Primary Masjid"}
-            </Text>
-          </Pressable>
+              <Ionicons
+                name={isPrimary ? "star" : "star-outline"}
+                size={15}
+                color={isPrimary ? "#fff" : Colors.primary}
+              />
+              <Text
+                style={[
+                  styles.setPrimaryHeroBtnText,
+                  isPrimary ? styles.setPrimaryHeroBtnTextActive : null
+                ]}
+              >
+                {isPrimary ? "Primary Masjid" : "Set as Primary"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.setPrimaryHeroBtn,
+                { backgroundColor: "rgba(212, 168, 67, 0.12)", borderColor: Colors.accent, marginTop: 0 },
+                pressed && styles.btnPressed
+              ]}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowQRModal(true);
+              }}
+            >
+              <Ionicons name="qr-code-outline" size={15} color={Colors.accent} />
+              <Text style={[styles.setPrimaryHeroBtnText, { color: Colors.accent }]}>
+                1-Day QR Code
+              </Text>
+            </Pressable>
+          </View>
         </View>
+
+        <MasjidQRModal
+          visible={showQRModal}
+          masjid={masjid}
+          onClose={() => setShowQRModal(false)}
+        />
 
         {events.length > 0 && (
           <View style={styles.eventsSection}>

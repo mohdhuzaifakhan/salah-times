@@ -90,7 +90,6 @@ export async function saveAppUpdateConfig(config: AppUpdateConfig): Promise<void
   try {
     const docRef = doc(db, "config", "app_update");
     await setDoc(docRef, config, { merge: true });
-    console.log("[Updates] Successfully saved app update config to Firestore.");
   } catch (error) {
     console.error("[Updates] Failed to save app update config to Firestore:", error);
     throw error;

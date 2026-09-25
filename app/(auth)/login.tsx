@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { QRScannerModal } from "@/components/QRScannerModal";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -23,6 +25,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -33,12 +36,23 @@ export default function LoginScreen() {
     const result = await login(email.trim(), password);
     setLoading(false);
     if (result.user) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.dismissAll();
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showCustomAlert("Login Failed", result.error || "Invalid email or password.");
     }
+  };
+
+  const handleForgotPassword = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    showCustomAlert(
+      "Forgot Password?",
+      "Masjid accounts use custom credentials managed directly by the Super Admin.\n\nIf you forgot your password, please contact the Super Admin to get your password reset.",
+      [
+        { text: "OK" },
+      ]
+    );
   };
 
   return (
@@ -76,7 +90,12 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Password</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Password</Text>
+            <TouchableOpacity onPress={handleForgotPassword}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.inputWrap}>
             <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
             <TextInput
@@ -113,7 +132,40 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* 1-Day Guest QR Scan Login Button */}
+        <TouchableOpacity
+          style={styles.qrScanBtn}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setShowQRScanner(true);
+          }}
+        >
+          <View style={styles.qrIconBadge}>
+            <Ionicons name="qr-code-outline" size={22} color={Colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.qrScanTitle}>Scan QR for 1-Day Login</Text>
+            <Text style={styles.qrScanDesc}>Instant guest access without email or password</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.accent} />
+        </TouchableOpacity>
       </ScrollView>
+
+      <QRScannerModal
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onSuccessLogin={() => {
+          setShowQRScanner(false);
+          router.dismissAll();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -154,11 +206,21 @@ const styles = StyleSheet.create({
   inputGroup: {
     gap: 6,
   },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginLeft: 4,
+  },
   label: {
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
     color: Colors.textSecondary,
-    marginLeft: 4,
+  },
+  forgotText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
   },
   inputWrap: {
     flexDirection: "row",
@@ -185,6 +247,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
+    width: "100%",
   },
   loginBtnText: {
     fontFamily: "Poppins_600SemiBold",
@@ -197,5 +260,51 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.7,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 12,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.borderLight,
+  },
+  dividerText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  qrScanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.accent,
+    borderRadius: 14,
+    padding: 16,
+    gap: 14,
+    width: "100%",
+  },
+  qrIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(212, 168, 67, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrScanTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: Colors.text,
+  },
+  qrScanDesc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
 });

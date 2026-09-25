@@ -16,7 +16,6 @@ export default function AppUpdateChecker() {
       const config = await fetchAppUpdateConfig();
 
       if (!config.enabled) {
-        console.log("[Updates] Update checks disabled by Firestore configuration.");
         return;
       }
 

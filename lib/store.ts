@@ -100,9 +100,8 @@ export async function getMasjidsPaginated({
         break;
       }
 
-      currentLastDoc = docs[docs.length - 1];
-
       for (const docSnap of docs) {
+        currentLastDoc = docSnap;
         const masjid = docSnap.data() as Masjid;
         
         let matchesCity = true;

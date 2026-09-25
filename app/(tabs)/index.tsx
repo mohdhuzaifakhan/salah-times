@@ -1,8 +1,8 @@
 import { EventCard } from "@/components/EventCard";
 import { MasjidCard } from "@/components/MasjidCard";
 import { ExploreSkeleton } from "@/components/Skeleton";
-import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
-import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+// import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
+// import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
 import { VoiceSearchButton } from "@/components/voice-search-button";
 import Colors from "@/constants/colors";
 import { showCustomAlert } from "@/lib/custom-alert";
@@ -146,7 +146,7 @@ export default function ExploreScreen() {
       setLoading(true);
       const [paginatedResult, eventsData] = await Promise.all([
         getMasjidsPaginated({
-          pageSize: 10,
+          pageSize: 20,
           lastDoc: null,
           city: currentCity,
           searchQuery: searchQuery,
@@ -188,7 +188,7 @@ export default function ExploreScreen() {
     try {
       setLoadingMore(true);
       const result = await getMasjidsPaginated({
-        pageSize: 10,
+        pageSize: 20,
         lastDoc: lastDocSnap,
         city: currentCity,
         searchQuery: search,
@@ -219,15 +219,9 @@ export default function ExploreScreen() {
     setRefreshing(false);
   };
 
+  // Ads disabled for now
   const filteredWithAds = useMemo(() => {
-    const result: (Masjid | { isAd: true; id: string })[] = [];
-    masjids.forEach((item, index) => {
-      result.push(item);
-      if ((index + 1) % 9 === 0) {
-        result.push({ isAd: true, id: `ad-${item.id}` });
-      }
-    });
-    return result;
+    return masjids;
   }, [masjids]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -300,9 +294,9 @@ export default function ExploreScreen() {
           data={filteredWithAds}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
-            if ('isAd' in item) {
-              return <NativeMasjidAdCard />;
-            }
+            // if ('isAd' in item) {
+            //   return <NativeMasjidAdCard />;
+            // }
             return (
               <MasjidCard
                 masjid={item}
@@ -399,7 +393,7 @@ export default function ExploreScreen() {
           }
         />
       )}
-      <PremiumBannerAd inTabBar={true} />
+      {/* <PremiumBannerAd inTabBar={true} /> */}
     </View>
   );
 }

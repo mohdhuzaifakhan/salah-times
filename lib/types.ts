@@ -31,6 +31,8 @@ export interface AdminUser {
   role: "super_admin" | "masjid_admin";
   masjidId?: string;
   password?: string;
+  isTempGuest?: boolean;
+  guestExpiresAt?: number;
 }
 
 export const DEFAULT_TIMETABLE: Timetable = {

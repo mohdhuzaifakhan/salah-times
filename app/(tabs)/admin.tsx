@@ -9,6 +9,7 @@ import {
   Platform,
   TextInput,
   Switch,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Modal, TouchableOpacity } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
@@ -23,13 +24,65 @@ import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 import { useLocation } from "@/lib/location-context";
 import { fetchAppUpdateConfig, saveAppUpdateConfig, AppUpdateConfig } from "@/lib/updates";
+import { QRScannerModal } from "@/components/QRScannerModal";
+import { MasjidQRModal } from "@/components/MasjidQRModal";
+import * as Clipboard from "expo-clipboard";
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();
-  const { admin, isLoading, logout } = useAuth();
+  const { admin, isLoading, logout, resetMasjidPasswordByAdmin } = useAuth();
   const { locations, selectedCity, refreshLocations } = useLocation();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [masjids, setMasjids] = useState<Masjid[]>([]);
+
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [selectedQRMasjid, setSelectedQRMasjid] = useState<Masjid | null>(null);
+
+  const [selectedResetMasjid, setSelectedResetMasjid] = useState<Masjid | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+
+  const getRemainingGuestTime = (expiresAt?: number) => {
+    if (!expiresAt) return "";
+    const diff = expiresAt - Date.now();
+    if (diff <= 0) return "Expired";
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${mins}m`;
+  };
+
+  const handleQuickResetPassword = async () => {
+    if (!selectedResetMasjid) return;
+    if (!resetNewPassword.trim() || resetNewPassword.trim().length < 6) {
+      showCustomAlert("Invalid Password", "Password must be at least 6 characters.");
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      const res = await resetMasjidPasswordByAdmin(selectedResetMasjid.id, resetNewPassword.trim());
+      if (res.success) {
+        const newPass = resetNewPassword.trim();
+        const mName = selectedResetMasjid.name;
+        const mEmail = selectedResetMasjid.adminEmail || "Masjid Admin";
+        setSelectedResetMasjid(null);
+        setResetNewPassword("");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Clipboard.setStringAsync(`Masjid: ${mName}\nEmail: ${mEmail}\nPassword: ${newPass}`);
+        showCustomAlert(
+          "Password Reset Successful!",
+          `New password has been set for "${mName}".\n\nEmail: ${mEmail}\nPassword: ${newPass}\n\n(Copied to clipboard!)`
+        );
+      } else {
+        showCustomAlert("Error", res.error || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      console.error("Failed to reset password:", err);
+      showCustomAlert("Error", err.message || "Failed to reset password.");
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
 
   const [showReleaseModal, setShowReleaseModal] = useState(false);
   const [releaseLatestVersion, setReleaseLatestVersion] = useState("1.0.0");
@@ -264,9 +317,9 @@ export default function AdminScreen() {
           <View style={styles.lockIcon}>
             <Ionicons name="key-outline" size={48} color={Colors.primary} />
           </View>
-          <Text style={styles.nlTitle}>Masjid Admin</Text>
+          <Text style={styles.nlTitle}>Masjid Management</Text>
           <Text style={styles.nlSubtitle}>
-            Login to manage your masjid&apos;s prayer timetable
+            Login as Admin or Scan Masjid QR Code for 1-Day Guest Access
           </Text>
           <Pressable
             style={({ pressed }) => [
@@ -279,21 +332,25 @@ export default function AdminScreen() {
             }}
           >
             <Ionicons name="log-in-outline" size={20} color="#fff" />
-            <Text style={styles.loginBtnText}>Login</Text>
+            <Text style={styles.loginBtnText}>Login with Email & Password</Text>
           </Pressable>
-          {/* <Pressable
-            style={({ pressed }) => [
-              styles.registerBtn,
-              pressed && styles.btnPressed,
-            ]}
+
+          <TouchableOpacity
+            style={styles.guestScanBtn}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/(auth)/register");
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowQRScanner(true);
             }}
           >
-            <Text style={styles.registerBtnText}>Register New Masjid</Text>
-          </Pressable> */}
+            <Ionicons name="qr-code-outline" size={20} color={Colors.accent} />
+            <Text style={styles.guestScanBtnText}>Scan QR Code for 1-Day Login</Text>
+          </TouchableOpacity>
         </View>
+
+        <QRScannerModal
+          visible={showQRScanner}
+          onClose={() => setShowQRScanner(false)}
+        />
       </View>
     );
   }
@@ -569,6 +626,30 @@ export default function AdminScreen() {
                           </View>
                         )}
                       </View>
+
+                      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                        <TouchableOpacity
+                          style={styles.headerIconBtn}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setSelectedQRMasjid(item);
+                          }}
+                        >
+                          <Ionicons name="qr-code-outline" size={18} color={Colors.primary} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.headerIconBtn}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setShowResetPassword(false);
+                            setResetNewPassword("");
+                            setSelectedResetMasjid(item);
+                          }}
+                        >
+                          <Ionicons name="key-outline" size={18} color={Colors.accent} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     <View style={styles.superMasjidFooter}>
@@ -597,7 +678,7 @@ export default function AdminScreen() {
                         }}
                       >
                         <Ionicons name="mail-unread-outline" size={14} color={Colors.accent} />
-                        <Text style={styles.superFeedbackBtnText}>Feedbacks</Text>
+                        <Text style={styles.superFeedbackBtnText}>Feedback</Text>
                       </Pressable>
 
                       <Pressable
@@ -621,6 +702,23 @@ export default function AdminScreen() {
           </>
         ) : masjid ? (
           <>
+            {admin.isTempGuest && (
+              <View style={styles.tempGuestBanner}>
+                <View style={styles.tempGuestHeaderRow}>
+                  <View style={styles.tempGuestBadge}>
+                    <Ionicons name="flash" size={14} color="#fff" />
+                    <Text style={styles.tempGuestBadgeText}>1-Day Guest Access</Text>
+                  </View>
+                  <Text style={styles.tempGuestTimeText}>
+                    Expires in: {getRemainingGuestTime(admin.guestExpiresAt)}
+                  </Text>
+                </View>
+                <Text style={styles.tempGuestBannerDesc}>
+                  You are logged into {masjid.name} for 24 hours via QR scan. Your session will automatically expire after 1 day.
+                </Text>
+              </View>
+            )}
+
             <View style={styles.masjidInfoCard}>
               <View style={styles.masjidInfoHeader}>
                 <View style={styles.masjidIconWrap}>
@@ -650,6 +748,24 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/* Quick Action Bar for Masjid Admin */}
+            <TouchableOpacity
+              style={styles.masjidQrBar}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedQRMasjid(masjid);
+              }}
+            >
+              <View style={styles.masjidQrBarIcon}>
+                <Ionicons name="qr-code-outline" size={18} color={Colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.masjidQrBarTitle}>1-Day Login QR Code</Text>
+                <Text style={styles.masjidQrBarDesc}>Show or print QR code for visitor guest access</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Prayer Timetable</Text>
@@ -922,6 +1038,116 @@ export default function AdminScreen() {
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* QR Code Scanner Modal */}
+      <QRScannerModal
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+      />
+
+      {/* Masjid QR Code Display Modal */}
+      <MasjidQRModal
+        visible={!!selectedQRMasjid}
+        masjid={selectedQRMasjid}
+        onClose={() => setSelectedQRMasjid(null)}
+      />
+
+      {/* Quick Reset Password Modal for Super Admin */}
+      <Modal
+        visible={!!selectedResetMasjid}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSelectedResetMasjid(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.resetModalOverlay}
+        >
+          <View style={styles.resetModalContent}>
+            {/* Header row */}
+            <View style={styles.resetModalHeaderRow}>
+              <View style={styles.resetKeyIconWrap}>
+                <Ionicons name="key" size={22} color={Colors.accent} />
+              </View>
+              <Text style={styles.resetModalTitle}>Reset Password</Text>
+              <TouchableOpacity
+                onPress={() => setSelectedResetMasjid(null)}
+                style={styles.resetCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.resetModalSubtitle}>
+              Reset login password for{" "}
+              <Text style={styles.resetMasjidHighlight}>
+                {selectedResetMasjid?.name}
+              </Text>
+            </Text>
+
+            {selectedResetMasjid?.adminEmail && (
+              <View style={styles.resetAdminEmailBadge}>
+                <Ionicons name="mail-outline" size={13} color={Colors.primary} />
+                <Text style={styles.resetAdminEmailText} numberOfLines={1}>
+                  {selectedResetMasjid.adminEmail}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.resetFormCard}>
+              <Text style={styles.resetFormTitle}>New Password</Text>
+              <View style={styles.resetInputWrap}>
+                <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
+                <TextInput
+                  style={styles.resetInput}
+                  placeholder="Enter new password (min 6 chars)"
+                  placeholderTextColor={Colors.textMuted}
+                  value={resetNewPassword}
+                  onChangeText={setResetNewPassword}
+                  secureTextEntry={!showResetPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Pressable onPress={() => setShowResetPassword(!showResetPassword)}>
+                  <Ionicons
+                    name={showResetPassword ? "eye-off-outline" : "eye-outline"}
+                    size={18}
+                    color={Colors.textMuted}
+                  />
+                </Pressable>
+              </View>
+              <Text style={styles.resetHintText}>Must be at least 6 characters</Text>
+            </View>
+
+            <View style={styles.resetActionsRow}>
+              <TouchableOpacity
+                style={styles.resetCancelBtn}
+                onPress={() => setSelectedResetMasjid(null)}
+              >
+                <Text style={styles.resetCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.resetSubmitBtn,
+                  isResettingPassword && styles.btnDisabled,
+                ]}
+                onPress={handleQuickResetPassword}
+                disabled={isResettingPassword}
+              >
+                {isResettingPassword ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                    <Text style={styles.resetSubmitBtnText}>Save Password</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1560,5 +1786,273 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     fontStyle: "italic",
+  },
+  guestScanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 12,
+    width: "100%",
+  },
+  guestScanBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.accent,
+  },
+  tempGuestBanner: {
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: Colors.accent,
+  },
+  tempGuestHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  tempGuestBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  tempGuestBadgeText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: "#fff",
+  },
+  tempGuestTimeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.accent,
+  },
+  tempGuestBannerDesc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.9)",
+    lineHeight: 18,
+  },
+  headerIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.overlay,
+  },
+  masjidQrBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  masjidQrBarIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "rgba(212, 168, 67, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  masjidQrBarTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.text,
+  },
+  masjidQrBarDesc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  qrBadgeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(10, 77, 60, 0.15)",
+  },
+  qrBadgeBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  resetPassBadgeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(212, 168, 67, 0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(212, 168, 67, 0.3)",
+  },
+  resetPassBadgeBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.accent,
+  },
+  resetModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  resetModalContent: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  resetModalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
+  },
+  resetKeyIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(212, 168, 67, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resetModalTitle: {
+    flex: 1,
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: Colors.text,
+  },
+  resetCloseBtn: {
+    padding: 4,
+  },
+  resetModalSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 12,
+  },
+  resetMasjidHighlight: {
+    fontFamily: "Poppins_700Bold",
+    color: Colors.primary,
+  },
+  resetAdminEmailBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  resetAdminEmailText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.primary,
+    flex: 1,
+  },
+  resetFormCard: {
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginBottom: 20,
+    gap: 6,
+  },
+  resetFormTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  resetInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    gap: 10,
+  },
+  resetInput: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: Colors.text,
+    padding: 0,
+  },
+  resetHintText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  resetActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  resetCancelBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  resetCancelBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  resetSubmitBtn: {
+    flex: 1.5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+  },
+  resetSubmitBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#fff",
   },
 });

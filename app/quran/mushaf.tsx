@@ -314,8 +314,8 @@ export default function MushafScreen() {
       ];
       for (const p of pagesToPrefetch) {
         if (p >= 1 && p <= 604) {
-          fetchQuranPage(p, preferences.translationLanguage).catch((err) => {
-            console.log(`Background prefetch failed for page ${p}:`, err);
+          fetchQuranPage(p, preferences.translationLanguage).catch(() => {
+            // Silence background prefetch errors
           });
         }
       }

@@ -6,6 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  DeviceEventEmitter,
+  AppState,
+  AppStateStatus,
+  BackHandler,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -34,6 +38,54 @@ export const PrayerAlarmModal: React.FC = () => {
 
     return unsubscribe;
   }, []);
+
+  // Listen to Phone Off / Power button (AppState backgrounding/screen locking) while modal is active
+  useEffect(() => {
+    if (!visible) return;
+
+    const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+      if (nextAppState === "background" || nextAppState === "inactive") {
+        void handleStop();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [visible]);
+
+  // Listen to hardware Back button press on Android
+  useEffect(() => {
+    if (!visible) return;
+
+    const onBackPress = () => {
+      void handleStop();
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => backHandler.remove();
+  }, [visible]);
+
+  // Listen to side hardware volume button presses while modal is active
+  useEffect(() => {
+    if (!visible) return;
+
+    let sub: any = null;
+    try {
+      sub = DeviceEventEmitter.addListener("onVolumeChanged", () => {
+        void handleStop();
+      });
+    } catch {
+      // Ignore
+    }
+
+    return () => {
+      if (sub && typeof sub.remove === "function") {
+        sub.remove();
+      }
+    };
+  }, [visible]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -109,6 +161,13 @@ export const PrayerAlarmModal: React.FC = () => {
             <Text style={styles.timerText}>Azaan Playing ({secondsLeft}s)</Text>
           </View>
 
+          <View style={styles.tipBox}>
+            <Ionicons name="power-outline" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.tipText}>
+              Press phone's <Text style={styles.boldText}>Power / Phone Off button</Text> or volume keys to silence immediately
+            </Text>
+          </View>
+
           <TouchableOpacity
             style={styles.stopButton}
             onPress={handleStop}
@@ -177,13 +236,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 14,
   },
   timerText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
     color: Colors.primary,
     marginLeft: 6,
+  },
+  tipBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(13, 115, 119, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(13, 115, 119, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 18,
+  },
+  tipText: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  boldText: {
+    fontFamily: "Poppins_600SemiBold",
+    color: Colors.text,
   },
   stopButton: {
     width: "100%",

@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  Modal,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useAuth, updateMasjidAdminCredentials, deleteMasjidAndAuth } from "@/lib/auth-context";
+import { useAuth, deleteMasjidAndAuth } from "@/lib/auth-context";
 import { getMasjidById, updateMasjidDetails, getUserProfile, getUserProfileByEmail } from "@/lib/store";
 import { useLocation } from "@/lib/location-context";
 import * as Clipboard from "expo-clipboard";
@@ -25,7 +26,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 export default function EditMasjidDetailsScreen() {
   const { masjidId } = useLocalSearchParams<{ masjidId: string }>();
   const insets = useSafeAreaInsets();
-  const { admin } = useAuth();
+  const { admin, resetMasjidPasswordByAdmin } = useAuth();
   const { locations } = useLocation();
 
   const canManageCredentials = 
@@ -38,10 +39,17 @@ export default function EditMasjidDetailsScreen() {
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [origEmail, setOrigEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [adminUid, setAdminUid] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Password reset modal states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   const availableCities = useMemo(() => {
     const stDoc = locations.find((l) => l.state === selectedState);
@@ -57,7 +65,6 @@ export default function EditMasjidDetailsScreen() {
           const m = await getMasjidById(masjidId);
           if (!isMounted) return;
           if (m) {
-            // Permission check
             if (
               admin?.role === "masjid_admin" &&
               admin.masjidId &&
@@ -101,6 +108,7 @@ export default function EditMasjidDetailsScreen() {
               if (profile && isMounted) {
                 setEmail(profile.email || m.adminEmail || "");
                 setOrigEmail(profile.email || m.adminEmail || "");
+                if (profile.password) setCurrentPassword(profile.password);
               } else if (m.adminEmail && isMounted) {
                 setEmail(m.adminEmail);
                 setOrigEmail(m.adminEmail);
@@ -169,6 +177,47 @@ export default function EditMasjidDetailsScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleResetPassword = async () => {
+    if (!masjidId) return;
+    if (!newPasswordInput.trim() || newPasswordInput.trim().length < 6) {
+      showCustomAlert("Invalid Password", "Password must be at least 6 characters long.");
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const res = await resetMasjidPasswordByAdmin(masjidId, newPasswordInput.trim());
+      if (res.success) {
+        setCurrentPassword(newPasswordInput.trim());
+        setShowResetModal(false);
+        const newPass = newPasswordInput.trim();
+        setNewPasswordInput("");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Auto copy credentials to clipboard
+        await Clipboard.setStringAsync(`Masjid: ${name}\nEmail: ${email}\nPassword: ${newPass}`);
+        showCustomAlert(
+          "Password Reset Successful!",
+          `New password has been set for "${name}".\n\nEmail: ${email}\nPassword: ${newPass}\n\n(Copied to clipboard!)`
+        );
+      } else {
+        showCustomAlert("Error", res.error || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      console.error("Failed to reset password:", err);
+      showCustomAlert("Error", err.message || "Something went wrong.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleCopyCredentials = async () => {
+    const credText = `Masjid: ${name}\nEmail: ${email}\nPassword: ${currentPassword || "Not Set"}`;
+    await Clipboard.setStringAsync(credText);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showCustomAlert("Copied!", "Account credentials copied to clipboard.");
   };
 
   const handleDelete = async () => {
@@ -349,6 +398,41 @@ export default function EditMasjidDetailsScreen() {
                 autoCorrect={false}
               />
             </View>
+
+            {admin?.role === "super_admin" && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Current Password</Text>
+                <View style={styles.passwordInputWrap}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={currentPassword || "••••••••"}
+                    editable={false}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color={Colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {admin?.role === "super_admin" && (
+              <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+                <TouchableOpacity style={styles.resetPassBtn} onPress={() => setShowResetModal(true)}>
+                  <Ionicons name="key-outline" size={16} color="#fff" />
+                  <Text style={styles.resetPassBtnText}>Reset Password</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCredentials}>
+                  <Ionicons name="copy-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.copyBtnText}>Copy Credentials</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
 
@@ -392,6 +476,62 @@ export default function EditMasjidDetailsScreen() {
           </Pressable>
         )}
       </KeyboardAwareScrollViewCompat>
+
+      {/* Reset Password Modal */}
+      <Modal
+        visible={showResetModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowResetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reset Masjid Password</Text>
+              <TouchableOpacity onPress={() => setShowResetModal(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalDesc}>
+              Set a new password for <Text style={{ fontFamily: "Poppins_700Bold" }}>{name}</Text> ({email}).
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>New Password</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter new password (min 6 chars)"
+                placeholderTextColor={Colors.textMuted}
+                value={newPasswordInput}
+                onChangeText={setNewPasswordInput}
+                secureTextEntry={false}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowResetModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, isResetting && styles.btnDisabled]}
+                onPress={handleResetPassword}
+                disabled={isResetting}
+              >
+                {isResetting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Update Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -490,21 +630,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.primary,
   },
-  copyBtn: {
+  resetPassBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  resetPassBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: "#fff",
+  },
+  copyBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     backgroundColor: Colors.overlay,
     borderWidth: 1.2,
     borderColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
-    marginBottom: 12,
   },
   copyBtnText: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.primary,
   },
   saveBtn: {
@@ -565,5 +720,70 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: "#fff",
     fontFamily: "Poppins_600SemiBold",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: Colors.text,
+  },
+  modalDesc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  modalCancelText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  modalSubmitBtn: {
+    flex: 1.5,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSubmitText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#fff",
   },
 });

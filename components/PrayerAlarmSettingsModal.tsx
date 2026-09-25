@@ -149,8 +149,8 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
         void loadSettingsAndPermissions();
         return;
       }
-    } catch (e) {
-      console.log("Failed to request permissions directly:", e);
+    } catch {
+      // Ignore request error
     }
 
     if (Platform.OS === "android") {
@@ -181,8 +181,8 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
     if (Platform.OS === "android") {
       try {
         await notifee.openBatteryOptimizationSettings();
-      } catch (e) {
-        console.log("Failed to open battery optimization settings:", e);
+      } catch {
+        // Ignore error
       }
     }
   };
@@ -299,6 +299,23 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
                 <Text style={[styles.testButtonText, { color: Colors.text }]}>Disable Battery Optimization</Text>
               </TouchableOpacity>
             )}
+          </View>
+
+          {/* Quick Guide Card: How to stop alarm */}
+          <View style={styles.infoGuideCard}>
+            <View style={styles.infoGuideHeader}>
+              <Smartphone size={18} color={Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.infoGuideTitle}>How to Stop Ringing Alarms</Text>
+            </View>
+            <Text style={styles.infoGuideItem}>
+              • <Text style={styles.boldSpan}>Phone Off / Power Button</Text>: Press the side Power button on your phone to instantly turn screen off and stop Azaan immediately (perfect during Namaz).
+            </Text>
+            <Text style={[styles.infoGuideItem, { marginTop: 4 }]}>
+              • <Text style={styles.boldSpan}>Side Volume Buttons</Text>: Press Volume Up or Volume Down to silence the alarm.
+            </Text>
+            <Text style={[styles.infoGuideItem, { marginTop: 4 }]}>
+              • <Text style={styles.boldSpan}>On-Screen STOP Button</Text>: Tap "STOP ALARM" on the ringing modal or lock-screen notification banner.
+            </Text>
           </View>
 
           {/* Android Exact Alarm / Notification Permission Warning Banner */}
@@ -710,5 +727,33 @@ const styles = StyleSheet.create({
   soundBtnTextActive: {
     fontFamily: "Poppins_600SemiBold",
     color: "#FFFFFF",
+  },
+  infoGuideCard: {
+    backgroundColor: "rgba(13, 115, 119, 0.08)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(13, 115, 119, 0.2)",
+  },
+  infoGuideHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  infoGuideTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: Colors.text,
+  },
+  infoGuideItem: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  boldSpan: {
+    fontFamily: "Poppins_600SemiBold",
+    color: Colors.text,
   },
 });

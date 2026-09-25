@@ -1,5 +1,5 @@
 import { AboutUsModal } from '@/components/AboutUsModal';
-import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+// import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
 import AppUpdateModal from '@/components/AppUpdateModal';
 import { ContactUsModal } from '@/components/ContactUsModal';
 import { PrayerAlarmSettingsModal } from '@/components/PrayerAlarmSettingsModal';
@@ -398,7 +398,7 @@ export default function SettingsScreen() {
           onClose={() => setUpdateModalState(prev => ({ ...prev, visible: false }))}
         />
       )}
-      <PremiumBannerAd inTabBar={true} />
+      {/* <PremiumBannerAd inTabBar={true} /> */}
     </SafeAreaView>
   );
 }

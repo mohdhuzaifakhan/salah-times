@@ -7,7 +7,7 @@ import notifee, {
 } from "@notifee/react-native";
 import { Audio } from "expo-av";
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync as setAudioModeAsyncExpoAudio } from "expo-audio";
-import { Image, Platform } from "react-native";
+import { AppState, AppStateStatus, DeviceEventEmitter, Image, Platform } from "react-native";
 import { getAlarmSettings, PrayerKey } from "./alarm-settings";
 import { getMasjidById, getPrimaryMasjidId } from "./store";
 import { Masjid } from "./types";
@@ -24,6 +24,8 @@ interface AlarmState {
 let activeSound: Audio.Sound | null = null;
 let activePlayer: AudioPlayer | null = null;
 let alarmTimeout: ReturnType<typeof setTimeout> | number | null = null;
+let volumeSubscription: any = null;
+let appStateSubscription: any = null;
 const alarmSubscribers: Array<(state: AlarmState) => void> = [];
 
 export function subscribeAlarmState(callback: (state: AlarmState) => void) {
@@ -46,6 +48,28 @@ export async function stopPrayerAlarm() {
   if (alarmTimeout) {
     clearTimeout(alarmTimeout);
     alarmTimeout = null;
+  }
+
+  if (volumeSubscription) {
+    try {
+      if (typeof volumeSubscription.remove === "function") {
+        volumeSubscription.remove();
+      }
+    } catch {
+      // Ignore cleanup error
+    }
+    volumeSubscription = null;
+  }
+
+  if (appStateSubscription) {
+    try {
+      if (typeof appStateSubscription.remove === "function") {
+        appStateSubscription.remove();
+      }
+    } catch {
+      // Ignore cleanup error
+    }
+    appStateSubscription = null;
   }
 
   if (activeSound) {
@@ -83,7 +107,8 @@ export async function stopPrayerAlarm() {
   }
 
   try {
-    // Only cancel currently displayed notification banners, NOT future scheduled triggers!
+    // Only cancel active playing notification and currently displayed notifications, NOT future scheduled triggers!
+    await notifee.cancelNotification("active_playing_alarm");
     await notifee.cancelDisplayedNotifications();
   } catch {
     // Ignore cleanup errors
@@ -94,7 +119,7 @@ export async function stopPrayerAlarm() {
 
 /**
  * Triggers a 30-second Azaan audio ringtone when a prayer notification arrives at prayer time.
- * Instantly opens the popup modal and plays bundled Azaan audio through speaker for 30s or until manually stopped.
+ * Instantly opens the popup modal, displays sticky notification, listens for power/volume buttons, and plays Azaan audio for 30s.
  */
 export async function triggerPrayerAlarm(
   prayerName: string = "Namaaz",
@@ -106,12 +131,67 @@ export async function triggerPrayerAlarm(
   // 1. Immediately open UI popup modal (0ms delay)
   notifyAlarmSubscribers({ isPlaying: true, prayerName, masjidName, offsetMinutes });
 
-  // 2. Set automatic 30s stop timeout (auto-closes popup and stops audio after 30 seconds)
+  // 2. Attach side volume button listener
+  try {
+    volumeSubscription = DeviceEventEmitter.addListener("onVolumeChanged", () => {
+      void stopPrayerAlarm();
+    });
+  } catch (volErr) {
+    console.warn("[Notifications] Error subscribing to volume events:", volErr);
+  }
+
+  // 3. Attach Phone Off / Power Button / Lock Screen listener (Pressing Power button or turning screen off instantly stops alarm)
+  try {
+    appStateSubscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (nextState === "background" || nextState === "inactive") {
+        void stopPrayerAlarm();
+      }
+    });
+  } catch (appErr) {
+    console.warn("[Notifications] Error subscribing to AppState events:", appErr);
+  }
+
+  // 4. Set automatic 30s stop timeout (auto-closes popup and stops audio after 30 seconds)
   alarmTimeout = setTimeout(() => {
     void stopPrayerAlarm();
   }, 30000);
 
-  // 3. Play audio session via expo-av (primary) with fallback to expo-audio
+  // 4. Post ongoing active notification banner on lock screen & notification tray with STOP action button
+  try {
+    await ensureAndroidChannels();
+    const titleText = offsetMinutes && offsetMinutes > 0
+      ? `⏰ ${prayerName} Alarm (${offsetMinutes}m Left)`
+      : `⏰ Time for ${prayerName} Prayer`;
+    const bodyText = masjidName
+      ? `${prayerName} notification for ${masjidName}. Press side volume buttons or tap STOP to silence.`
+      : `${prayerName} prayer notification. Press side volume buttons or tap STOP to silence.`;
+
+    await notifee.displayNotification({
+      id: "active_playing_alarm",
+      title: titleText,
+      body: bodyText,
+      android: {
+        channelId: "azaan-alarm",
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+        ongoing: true,
+        autoCancel: false,
+        pressAction: {
+          id: "stop",
+        },
+        actions: [
+          {
+            title: "🛑 STOP ALARM",
+            pressAction: { id: "stop" },
+          },
+        ],
+      },
+    });
+  } catch (notifErr) {
+    console.warn("[Notifications] Error displaying active notification banner:", notifErr);
+  }
+
+  // 5. Play audio session via expo-av (primary) with fallback to expo-audio
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -438,7 +518,6 @@ export async function schedulePrimaryMasjidNotifications(masjid: Masjid): Promis
           }
         }
       }
-      console.log(`[Notifications] Successfully scheduled ${scheduledCount} exact prayer alarms via Notifee.`);
     } catch (error) {
       console.error("[Notifications] Error scheduling prayer notifications:", error);
     }
@@ -465,7 +544,20 @@ export function setupForegroundPrayerWatcher(_getPrimaryMasjid: () => Masjid | n
 export async function handleNotifeeBackgroundEvent(event: Event) {
   const { type, detail } = event;
 
+  if (
+    detail.pressAction?.id === "stop" ||
+    detail.notification?.id === "active_playing_alarm"
+  ) {
+    if (type === EventType.ACTION_PRESS || type === EventType.PRESS) {
+      await stopPrayerAlarm();
+      return;
+    }
+  }
+
   if (type === EventType.DELIVERED || type === EventType.PRESS) {
+    // Ignore DELIVERED for active_playing_alarm to avoid loop
+    if (detail.notification?.id === "active_playing_alarm") return;
+
     const data = detail.notification?.data;
     if (data?.isPrayerAlarm === "true") {
       const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
@@ -473,8 +565,6 @@ export async function handleNotifeeBackgroundEvent(event: Event) {
       const offsetMinutes = Number(data.offsetMinutes) || 0;
       await triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
     }
-  } else if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
-    await stopPrayerAlarm();
   }
 }
 
@@ -499,7 +589,20 @@ export function setupPrayerAlarmListeners() {
   const unsubscribe = notifee.onForegroundEvent(async (event: Event) => {
     const { type, detail } = event;
 
+    if (
+      detail.pressAction?.id === "stop" ||
+      detail.notification?.id === "active_playing_alarm"
+    ) {
+      if (type === EventType.ACTION_PRESS || type === EventType.PRESS) {
+        await stopPrayerAlarm();
+        return;
+      }
+    }
+
     if (type === EventType.DELIVERED || type === EventType.PRESS) {
+      // Ignore DELIVERED for active_playing_alarm to avoid loop
+      if (detail.notification?.id === "active_playing_alarm") return;
+
       const data = detail.notification?.data;
       if (data?.isPrayerAlarm === "true") {
         const prayerName = typeof data.prayerName === "string" ? data.prayerName : "Namaaz";
@@ -507,8 +610,6 @@ export function setupPrayerAlarmListeners() {
         const offsetMinutes = Number(data.offsetMinutes) || 0;
         await triggerPrayerAlarm(prayerName, masjidName, offsetMinutes);
       }
-    } else if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "stop") {
-      await stopPrayerAlarm();
     }
   });
 

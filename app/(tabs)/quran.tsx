@@ -1,5 +1,5 @@
 import { QuranSkeleton } from '@/components/Skeleton';
-import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+// import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
 import SurahCard from '@/components/quran/SurahCard';
 import { VoiceSearchButton } from '@/components/voice-search-button';
 import Colors from '@/constants/colors';
@@ -308,7 +308,7 @@ export default function QuranHomeScreen() {
         />
       )}
 
-      <PremiumBannerAd inTabBar={true} />
+      {/* <PremiumBannerAd inTabBar={true} /> */}
     </View>
   );
 }

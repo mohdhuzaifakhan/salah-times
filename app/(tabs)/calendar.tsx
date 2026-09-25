@@ -16,8 +16,8 @@ import CalendarView from '@/components/calendar/CalendarView';
 import CountdownCard from '@/components/calendar/CountdownCard';
 import EventListCard from '@/components/calendar/EventListCard';
 import { CalendarSkeleton } from '@/components/Skeleton';
-import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
-import { NativeMasjidAdCard } from '@/components/ads/NativeMasjidAdCard';
+// import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
+// import { NativeMasjidAdCard } from '@/components/ads/NativeMasjidAdCard';
 
 export default function IslamicCalendarScreen() {
   const { t } = useLanguage();
@@ -93,14 +93,14 @@ export default function IslamicCalendarScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <NativeMasjidAdCard 
             headline="Support Muslim Orphans Worldwide"
             body="Your Sadaqah provides warm meals, clean water, and access to education for orphans in need."
             advertiser="OrphanRelief Care"
             callToAction="Sponsor an Orphan"
           />
-        </View>
+        </View> */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('upcoming_events')}</Text>
@@ -113,7 +113,7 @@ export default function IslamicCalendarScreen() {
           ))}
         </View>
       </ScrollView>
-      <PremiumBannerAd inTabBar={true} />
+      {/* <PremiumBannerAd inTabBar={true} /> */}
     </SafeAreaView>
   );
 }
