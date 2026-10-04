@@ -1,4 +1,4 @@
-import { Masjid, AdminUser, AppEvent, LocationState } from "./types";
+import { Masjid, AdminUser, AppEvent, LocationState, MasjidRequest } from "./types";
 import { db } from "./firebaseConfig";
 import {
   collection,
@@ -105,7 +105,7 @@ export async function getMasjidsPaginated({
         const masjid = docSnap.data() as Masjid;
         
         let matchesCity = true;
-        if (cleanCity && cleanCity !== "all") {
+        if (cleanCity && cleanCity !== "all" && cleanCity !== "all cities") {
           const mCity = masjid.city ? masjid.city.trim().toLowerCase() : "";
           if (cleanCity === "other") {
             matchesCity = !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
@@ -152,7 +152,7 @@ export async function getMasjidsPaginated({
 
       const filtered = allCached.filter((masjid) => {
         let matchesCity = true;
-        if (cleanCity && cleanCity !== "all") {
+        if (cleanCity && cleanCity !== "all" && cleanCity !== "all cities") {
           const mCity = masjid.city ? masjid.city.trim().toLowerCase() : "";
           if (cleanCity === "other") {
             matchesCity = !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
@@ -199,10 +199,7 @@ export async function getMasjidsPaginated({
 
 export async function getAllMasjids(): Promise<Masjid[]> {
   try {
-    const fetchPromise = getDocs(collection(db, MASJIDS_COLLECTION));
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
-    const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]);
-
+    const querySnapshot = await getDocs(collection(db, MASJIDS_COLLECTION));
     if (querySnapshot) {
       const masjids: Masjid[] = [];
       querySnapshot.forEach((doc) => {
@@ -622,11 +619,12 @@ export async function createMasjidMessage(
   suggestedTime: string,
   message: string,
   phone: string,
-  messageType: string = "timetable_update"
+  messageType: string = "timetable_update",
+  timetablePhotoBase64?: string
 ): Promise<any> {
   try {
     const msgRef = doc(collection(db, "masjid_messages"));
-    const newMsg = {
+    const rawMsg = {
       id: msgRef.id,
       masjidId,
       masjidName,
@@ -636,7 +634,9 @@ export async function createMasjidMessage(
       phone,
       createdAt: Date.now(),
       messageType,
+      timetablePhotoBase64,
     };
+    const newMsg = cleanFirestoreData(rawMsg);
     await setDoc(msgRef, newMsg);
     return newMsg;
   } catch (error) {
@@ -825,12 +825,39 @@ export async function deleteAppMessage(id: string): Promise<boolean> {
   }
 }
 
-// Location (State & City) Management
+// Location (State, District & Sub-division) Management
 const DEFAULT_LOCATIONS: LocationState[] = [
   {
     id: "uttar_pradesh",
     state: "Uttar Pradesh",
     cities: ["Rampur", "Moradabad", "Bareilly", "Sambhal"],
+    districts: [
+      {
+        id: "rampur",
+        name: "Rampur",
+        subDivisions: [
+          "Rampur city",
+          "Tanda",
+          "Dariyal",
+          "Suar",
+          "Maswasi",
+          "Bilaspur",
+          "Milak",
+          "Shahabad",
+          "Chamraua"
+        ],
+      },
+      {
+        id: "moradabad",
+        name: "Moradabad",
+        subDivisions: ["Moradabad City", "Kanth", "Thakurdwara", "Bilari", "Kundarki"],
+      },
+      {
+        id: "bareilly",
+        name: "Bareilly",
+        subDivisions: ["Bareilly City", "Aonla", "Baheri", "Faridpur", "Nawabganj"],
+      },
+    ],
   },
 ];
 
@@ -851,9 +878,15 @@ export async function getLocations(): Promise<LocationState[]> {
         return DEFAULT_LOCATIONS;
       }
       const locations: LocationState[] = [];
-      querySnapshot.forEach((docSnap) => {
-        locations.push(docSnap.data() as LocationState);
-      });
+      for (const docSnap of querySnapshot.docs) {
+        const data = docSnap.data() as LocationState;
+        // Auto-migrate/ensure default districts if missing (e.g. Rampur sub-divisions)
+        if (data.id === "uttar_pradesh" && (!data.districts || data.districts.length === 0)) {
+          data.districts = DEFAULT_LOCATIONS[0].districts;
+          void setDoc(doc(db, LOCATIONS_COLLECTION, data.id), data, { merge: true });
+        }
+        locations.push(data);
+      }
       const sorted = locations.sort((a, b) => a.state.localeCompare(b.state));
       void AsyncStorage.setItem(LOCATIONS_CACHE_KEY, JSON.stringify(sorted));
       return sorted;
@@ -881,6 +914,7 @@ export async function addState(stateName: string): Promise<LocationState> {
       id: docId,
       state: stateName.trim(),
       cities: [],
+      districts: [],
     };
     await setDoc(doc(db, LOCATIONS_COLLECTION, docId), newLocation);
     return newLocation;
@@ -890,16 +924,232 @@ export async function addState(stateName: string): Promise<LocationState> {
   }
 }
 
-export async function addCityToState(stateId: string, cityName: string): Promise<void> {
+export async function addDistrictToState(stateId: string, districtName: string): Promise<void> {
   try {
     const docRef = doc(db, LOCATIONS_COLLECTION, stateId);
-    await updateDoc(docRef, {
-      cities: arrayUnion(cityName.trim()),
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return;
+    const data = docSnap.data() as LocationState;
+    const districts = data.districts || [];
+    const cleanName = districtName.trim();
+    if (districts.some((d) => d.name.toLowerCase() === cleanName.toLowerCase())) return;
+
+    districts.push({
+      id: cleanName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+      name: cleanName,
+      subDivisions: [],
     });
+
+    const cities = data.cities || [];
+    if (!cities.includes(cleanName)) {
+      cities.push(cleanName);
+    }
+
+    await updateDoc(docRef, { districts, cities });
   } catch (error) {
-    console.error("Error adding city to state:", error);
+    console.error("Error adding district to state:", error);
     throw error;
   }
 }
+
+export async function addSubDivisionToDistrict(
+  stateId: string,
+  districtName: string,
+  subDivisionName: string
+): Promise<void> {
+  try {
+    const docRef = doc(db, LOCATIONS_COLLECTION, stateId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return;
+    const data = docSnap.data() as LocationState;
+    const districts = data.districts || [];
+    const cleanSub = subDivisionName.trim();
+    const cleanDist = districtName.trim().toLowerCase();
+
+    let targetDist = districts.find((d) => d.name.toLowerCase() === cleanDist || d.id === cleanDist);
+    if (!targetDist) {
+      targetDist = {
+        id: cleanDist.replace(/[^a-z0-9]/g, "_"),
+        name: districtName.trim(),
+        subDivisions: [],
+      };
+      districts.push(targetDist);
+    }
+
+    if (!targetDist.subDivisions.some((s) => s.toLowerCase() === cleanSub.toLowerCase())) {
+      targetDist.subDivisions.push(cleanSub);
+    }
+
+    await updateDoc(docRef, { districts });
+  } catch (error) {
+    console.error("Error adding sub-division:", error);
+    throw error;
+  }
+}
+
+export async function deleteSubDivisionFromDistrict(
+  stateId: string,
+  districtName: string,
+  subDivisionName: string
+): Promise<void> {
+  try {
+    const docRef = doc(db, LOCATIONS_COLLECTION, stateId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return;
+    const data = docSnap.data() as LocationState;
+    const districts = data.districts || [];
+    const cleanSub = subDivisionName.trim().toLowerCase();
+    const cleanDist = districtName.trim().toLowerCase();
+
+    const targetDist = districts.find((d) => d.name.toLowerCase() === cleanDist || d.id === cleanDist);
+    if (targetDist) {
+      targetDist.subDivisions = targetDist.subDivisions.filter((s) => s.toLowerCase() !== cleanSub);
+      await updateDoc(docRef, { districts });
+    }
+  } catch (error) {
+    console.error("Error deleting sub-division:", error);
+    throw error;
+  }
+}
+
+export async function deleteDistrictFromState(stateId: string, districtName: string): Promise<void> {
+  try {
+    const docRef = doc(db, LOCATIONS_COLLECTION, stateId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return;
+    const data = docSnap.data() as LocationState;
+    const cleanDist = districtName.trim().toLowerCase();
+    const districts = (data.districts || []).filter((d) => d.name.toLowerCase() !== cleanDist && d.id !== cleanDist);
+    const cities = (data.cities || []).filter((c) => c.toLowerCase() !== cleanDist);
+    await updateDoc(docRef, { districts, cities });
+  } catch (error) {
+    console.error("Error deleting district:", error);
+    throw error;
+  }
+}
+
+export async function deleteState(stateId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, LOCATIONS_COLLECTION, stateId));
+  } catch (error) {
+    console.error("Error deleting state:", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// MASJID REQUESTS (User Registration Requests)
+// ==========================================
+
+export function cleanFirestoreData<T extends Record<string, any>>(obj: T): T {
+  const cleaned: Record<string, any> = {};
+  Object.keys(obj).forEach((key) => {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  });
+  return cleaned as T;
+}
+
+export async function createMasjidRequest(
+  data: Omit<MasjidRequest, "id" | "createdAt" | "status">
+): Promise<MasjidRequest> {
+  try {
+    const reqRef = doc(collection(db, "masjid_requests"));
+    const rawRequest: MasjidRequest = {
+      id: reqRef.id,
+      ...data,
+      status: "pending",
+      createdAt: Date.now(),
+    };
+    const newRequest = cleanFirestoreData(rawRequest);
+    await setDoc(reqRef, newRequest);
+
+    // 1. Notify Super Admin via Firestore notification
+    try {
+      await createAdminNotification(
+        "New Masjid Registration Request",
+        `Request for "${data.masjidName}" in ${data.city}. WhatsApp: ${data.whatsappNumber}`,
+        "new_masjid_request",
+        "global",
+        data.masjidName
+      );
+    } catch (e) {
+      console.error("Failed to create admin notification for masjid request:", e);
+    }
+
+    // 2. Trigger local admin notification
+    try {
+      const { sendLocalAdminNotification } = await import("./notifications");
+      await sendLocalAdminNotification(
+        "New Masjid Registration Request",
+        `"${data.masjidName}" in ${data.city} (WhatsApp: ${data.whatsappNumber})`
+      );
+    } catch (e) {
+      console.error("Failed to trigger local admin notification:", e);
+    }
+
+    return newRequest;
+  } catch (error) {
+    console.error("Error creating masjid request:", error);
+    throw error;
+  }
+}
+
+export async function getMasjidRequests(): Promise<MasjidRequest[]> {
+  try {
+    const q = query(collection(db, "masjid_requests"));
+    const querySnapshot = await getDocs(q);
+    const requests: MasjidRequest[] = [];
+    querySnapshot.forEach((docSnap) => {
+      requests.push(docSnap.data() as MasjidRequest);
+    });
+    return requests.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.error("Error getting masjid requests:", error);
+    return [];
+  }
+}
+
+export async function updateMasjidRequestStatus(
+  requestId: string,
+  status: "pending" | "approved" | "rejected"
+): Promise<boolean> {
+  try {
+    const docRef = doc(db, "masjid_requests", requestId);
+    await updateDoc(docRef, { status });
+    return true;
+  } catch (error) {
+    console.error("Error updating masjid request status:", error);
+    return false;
+  }
+}
+
+export async function deleteMasjidRequest(requestId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "masjid_requests", requestId));
+    return true;
+  } catch (error) {
+    console.error("Error deleting masjid request:", error);
+    return false;
+  }
+}
+
+export async function cleanCompletedMasjidRequests(): Promise<number> {
+  try {
+    const requests = await getMasjidRequests();
+    const completed = requests.filter((r) => r.status === "approved" || r.status === "rejected");
+    let count = 0;
+    for (const req of completed) {
+      await deleteDoc(doc(db, "masjid_requests", req.id));
+      count++;
+    }
+    return count;
+  } catch (error) {
+    console.error("Error cleaning completed masjid requests:", error);
+    return 0;
+  }
+}
+
 
 

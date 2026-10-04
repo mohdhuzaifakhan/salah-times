@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
@@ -22,12 +22,20 @@ import { useLocation } from "@/lib/location-context";
 export default function RegisterScreen() {
   const { admin, register } = useAuth();
   const { locations } = useLocation();
+  const params = useLocalSearchParams<{
+    prefillName?: string;
+    prefillCity?: string;
+    prefillSubDivision?: string;
+    prefillAddress?: string;
+  }>();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [masjidName, setMasjidName] = useState("");
+  const [masjidName, setMasjidName] = useState(params.prefillName || "");
   const [selectedState, setSelectedState] = useState(locations[0]?.state || "Uttar Pradesh");
-  const [city, setCity] = useState(locations[0]?.cities[0] || "Rampur");
-  const [address, setAddress] = useState("");
+  const [city, setCity] = useState(params.prefillCity || locations[0]?.cities[0] || "Rampur");
+  const [subDivision, setSubDivision] = useState(params.prefillSubDivision || "");
+  const [address, setAddress] = useState(params.prefillAddress || "");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -35,6 +43,13 @@ export default function RegisterScreen() {
     const stDoc = locations.find((l) => l.state === selectedState);
     return stDoc ? stDoc.cities : [];
   }, [locations, selectedState]);
+
+  const availableSubDivisions = useMemo(() => {
+    const stDoc = locations.find((l) => l.state === selectedState);
+    if (!stDoc || !stDoc.districts) return [];
+    const dist = stDoc.districts.find((d) => d.name.toLowerCase() === city.toLowerCase() || d.id === city.toLowerCase());
+    return dist ? dist.subDivisions : [];
+  }, [locations, selectedState, city]);
 
   if (!admin || admin.role !== "super_admin") {
     return (
@@ -60,7 +75,14 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     try {
-      const result = await register(email.trim(), password, masjidName.trim(), city.trim(), address.trim());
+      const result = await register(
+        email.trim(),
+        password,
+        masjidName.trim(),
+        city.trim(),
+        address.trim(),
+        subDivision.trim()
+      );
       if (result.error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         showCustomAlert("Registration Failed", result.error);
@@ -198,10 +220,40 @@ export default function RegisterScreen() {
             <Ionicons name="business-outline" size={18} color={Colors.textMuted} />
             <TextInput
               style={styles.input}
-              placeholder="Or enter city manually"
+              placeholder="Or enter district manually"
               placeholderTextColor={Colors.textMuted}
               value={city}
               onChangeText={setCity}
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Sub-division / Area</Text>
+          {availableSubDivisions.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+              {availableSubDivisions.map((sub) => {
+                const isSel = sub === subDivision;
+                return (
+                  <TouchableOpacity
+                    key={sub}
+                    style={[styles.chip, isSel && styles.chipActive]}
+                    onPress={() => setSubDivision(sub)}
+                  >
+                    <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{sub}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+          <View style={[styles.inputWrap, { marginTop: 6 }]}>
+            <Ionicons name="map-outline" size={18} color={Colors.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Rampur city, Tanda, Suar, Bilaspur..."
+              placeholderTextColor={Colors.textMuted}
+              value={subDivision}
+              onChangeText={setSubDivision}
             />
           </View>
         </View>

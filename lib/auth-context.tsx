@@ -71,7 +71,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ user: AdminUser | null; error?: string }>;
   loginAsGuest: (masjidId: string) => Promise<{ success: boolean; masjidName?: string; error?: string }>;
-  register: (email: string, password: string, masjidName: string, city: string, address: string) => Promise<{ admin: AdminUser; error?: undefined } | { admin?: undefined; error: string }>;
+  register: (email: string, password: string, masjidName: string, city: string, address: string, subDivision?: string) => Promise<{ admin: AdminUser; error?: undefined } | { admin?: undefined; error: string }>;
   logout: () => Promise<void>;
   resetMasjidPasswordByAdmin: (masjidId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -235,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string, masjidName: string, city: string, address: string) => {
+  const register = async (email: string, password: string, masjidName: string, city: string, address: string, subDivision?: string) => {
     const superAdminEmail = auth.currentUser?.email || "";
     if (!isSuperAdminEmail(superAdminEmail)) {
       return { error: "Only super admin can register masjid accounts." };
@@ -266,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const masjid = await createMasjid({
         name: masjidName,
         city,
+        subDivision: subDivision || "",
         address,
         adminUid: uid,
         adminEmail: masjidAdminEmail,

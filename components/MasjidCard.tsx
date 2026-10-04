@@ -53,9 +53,9 @@ export function MasjidCard({
             )}
           </View>
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="location-outline" size={13} color={Colors.primary} />
             <Text style={styles.city} numberOfLines={1}>
-              {masjid.city}
+              {masjid.subDivision ? `${masjid.subDivision}, ${masjid.city}` : masjid.city}
             </Text>
           </View>
         </View>

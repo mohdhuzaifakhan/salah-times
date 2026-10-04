@@ -92,8 +92,13 @@ export default function AdminNotificationsScreen() {
       await handleMarkRead(item);
     }
 
-    // 2. Redirect to masjid feedback viewer page
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (item.type === "new_masjid_request") {
+      router.push({ pathname: "/(tabs)/admin" });
+      return;
+    }
+
+    // 2. Redirect to masjid feedback viewer page
     router.push({
       pathname: "/masjid-feedback",
       params: { masjidId: item.masjidId, masjidName: item.masjidName },

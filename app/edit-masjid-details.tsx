@@ -37,6 +37,7 @@ export default function EditMasjidDetailsScreen() {
   const [address, setAddress] = useState("");
   const [selectedState, setSelectedState] = useState(locations[0]?.state || "Uttar Pradesh");
   const [city, setCity] = useState("");
+  const [subDivision, setSubDivision] = useState("");
   const [email, setEmail] = useState("");
   const [origEmail, setOrigEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -55,6 +56,15 @@ export default function EditMasjidDetailsScreen() {
     const stDoc = locations.find((l) => l.state === selectedState);
     return stDoc ? stDoc.cities : [];
   }, [locations, selectedState]);
+
+  const availableSubDivisions = useMemo(() => {
+    const stDoc = locations.find((l) => l.state === selectedState);
+    if (!stDoc || !stDoc.districts) return [];
+    const dist = stDoc.districts.find(
+      (d) => d.name.toLowerCase() === city.toLowerCase() || d.id === city.toLowerCase()
+    );
+    return dist ? dist.subDivisions : [];
+  }, [locations, selectedState, city]);
 
   useEffect(() => {
     let isMounted = true;
@@ -77,6 +87,7 @@ export default function EditMasjidDetailsScreen() {
             setName(m.name);
             setAddress(m.address);
             setCity(m.city);
+            setSubDivision(m.subDivision || "");
             setAdminUid(m.adminUid);
 
             if (m.city && locations.length > 0) {
@@ -159,6 +170,7 @@ export default function EditMasjidDetailsScreen() {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
+        subDivision: subDivision.trim() || undefined,
         adminUid: adminUid || undefined,
       });
 
@@ -372,6 +384,36 @@ export default function EditMasjidDetailsScreen() {
             value={city}
             onChangeText={setCity}
             placeholder="Or enter city name manually"
+            placeholderTextColor={Colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Sub-division / Area</Text>
+          {availableSubDivisions.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+              {availableSubDivisions.map((sub) => {
+                const isSel = sub.toLowerCase() === subDivision.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={sub}
+                    style={[styles.chip, isSel && styles.chipActive]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSubDivision(sub);
+                    }}
+                  >
+                    <Text style={[styles.chipText, isSel && styles.chipTextActive]}>{sub}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+          <TextInput
+            style={[styles.textInput, { marginTop: availableSubDivisions.length > 0 ? 8 : 0 }]}
+            value={subDivision}
+            onChangeText={setSubDivision}
+            placeholder="e.g. Rampur city, Tanda, Suar, Bilaspur..."
             placeholderTextColor={Colors.textMuted}
           />
         </View>

@@ -3,6 +3,7 @@ import { AboutUsModal } from '@/components/AboutUsModal';
 import AppUpdateModal from '@/components/AppUpdateModal';
 import { ContactUsModal } from '@/components/ContactUsModal';
 import { PrayerAlarmSettingsModal } from '@/components/PrayerAlarmSettingsModal';
+import { RequestNewMasjidModal } from '@/components/RequestNewMasjidModal';
 import { ShareAppModal } from '@/components/ShareAppModal';
 import Colors from '@/constants/colors';
 import { showCustomAlert } from '@/lib/custom-alert';
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [alarmSettingsModalVisible, setAlarmSettingsModalVisible] = useState(false);
+  const [requestMasjidModalVisible, setRequestMasjidModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
@@ -279,6 +281,18 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
             }
           />
+          <SettingItem
+            icon="add-circle-outline"
+            title="Request New Masjid"
+            subtitle="Submit details & photos to add your local masjid"
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setRequestMasjidModalVisible(true);
+            }}
+            rightElement={
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            }
+          />
         </View>
 
         {/* 2. Support & About Settings */}
@@ -377,6 +391,12 @@ export default function SettingsScreen() {
         visible={alarmSettingsModalVisible}
         onClose={() => setAlarmSettingsModalVisible(false)}
         primaryMasjidName={primaryMasjid?.name}
+      />
+      <RequestNewMasjidModal
+        visible={requestMasjidModalVisible}
+        onClose={() => setRequestMasjidModalVisible(false)}
+        defaultCity={selectedCity || ''}
+        defaultState={selectedState || ''}
       />
       <ContactUsModal
         visible={contactModalVisible}

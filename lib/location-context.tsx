@@ -20,15 +20,18 @@ import { fuzzyMatch } from "@/lib/fuzzy-search";
 
 const CITY_KEY = "@user_selected_city";
 const STATE_KEY = "@user_selected_state";
+const SUBDIVISION_KEY = "@user_selected_subdivision";
 
 interface LocationContextType {
   selectedCity: string | null;
   selectedState: string | null;
+  selectedSubDivision: string | null;
   locations: LocationState[];
   isLoading: boolean;
   openLocationModal: () => void;
   closeLocationModal: () => void;
-  selectLocation: (city: string, state: string) => Promise<void>;
+  selectLocation: (city: string, state: string, subDivision?: string | null) => Promise<void>;
+  selectSubDivision: (subDivision: string | null) => Promise<void>;
   refreshLocations: () => Promise<void>;
 }
 
@@ -38,6 +41,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [locations, setLocations] = useState<LocationState[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedSubDivision, setSelectedSubDivision] = useState<string | null>(null);
   const [activeStateTab, setActiveStateTab] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -48,10 +52,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [allLocations, savedCity, savedState] = await Promise.all([
+      const [allLocations, savedCity, savedState, savedSub] = await Promise.all([
         getLocations(),
         AsyncStorage.getItem(CITY_KEY),
         AsyncStorage.getItem(STATE_KEY),
+        AsyncStorage.getItem(SUBDIVISION_KEY),
       ]);
 
       setLocations(allLocations);
@@ -59,22 +64,21 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (savedCity) {
         setSelectedCity(savedCity);
         setSelectedState(savedState || (allLocations[0]?.state ?? "Uttar Pradesh"));
+        setSelectedSubDivision(savedSub || null);
         setActiveStateTab(savedState || (allLocations[0]?.state ?? "Uttar Pradesh"));
-      } else if (allLocations && allLocations.length > 0) {
-        setSelectedCity(null);
-        setSelectedState(null);
-        setActiveStateTab(allLocations[0]?.state ?? "Uttar Pradesh");
-        setShowModal(true);
       } else {
-        // Fallback if no location data is returned from server
-        setSelectedCity("Rampur");
-        setSelectedState("Uttar Pradesh");
-        setActiveStateTab("Uttar Pradesh");
+        setSelectedCity("All Cities");
+        setSelectedState("All States");
+        setSelectedSubDivision(null);
+        if (allLocations && allLocations.length > 0) {
+          setActiveStateTab(allLocations[0]?.state ?? "Uttar Pradesh");
+        }
       }
     } catch (error) {
       console.error("Error loading location context:", error);
-      setSelectedCity("Rampur");
-      setSelectedState("Uttar Pradesh");
+      setSelectedCity("All Cities");
+      setSelectedState("All States");
+      setSelectedSubDivision(null);
       setActiveStateTab("Uttar Pradesh");
     } finally {
       setIsLoading(false);
@@ -85,13 +89,19 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadData();
   }, [loadData]);
 
-  const selectLocation = async (city: string, state: string) => {
+  const selectLocation = async (city: string, state: string, subDivision: string | null = null) => {
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await AsyncStorage.setItem(CITY_KEY, city);
       await AsyncStorage.setItem(STATE_KEY, state);
+      if (subDivision) {
+        await AsyncStorage.setItem(SUBDIVISION_KEY, subDivision);
+      } else {
+        await AsyncStorage.removeItem(SUBDIVISION_KEY);
+      }
       setSelectedCity(city);
       setSelectedState(state);
+      setSelectedSubDivision(subDivision);
       setShowModal(false);
       setSearch("");
     } catch (error) {
@@ -99,9 +109,23 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const selectSubDivision = async (subDivision: string | null) => {
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (subDivision) {
+        await AsyncStorage.setItem(SUBDIVISION_KEY, subDivision);
+      } else {
+        await AsyncStorage.removeItem(SUBDIVISION_KEY);
+      }
+      setSelectedSubDivision(subDivision);
+    } catch (error) {
+      console.error("Error saving selected subdivision:", error);
+    }
+  };
+
   const openLocationModal = () => {
     setSearch("");
-    if (selectedState) {
+    if (selectedState && selectedState !== "All States") {
       setActiveStateTab(selectedState);
     } else if (locations.length > 0) {
       setActiveStateTab(locations[0].state);
@@ -111,10 +135,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const closeLocationModal = () => {
     if (!selectedCity) {
-      setSelectedCity("Rampur");
-      setSelectedState("Uttar Pradesh");
-      void AsyncStorage.setItem(CITY_KEY, "Rampur");
-      void AsyncStorage.setItem(STATE_KEY, "Uttar Pradesh");
+      setSelectedCity("All Cities");
+      setSelectedState("All States");
+      setSelectedSubDivision(null);
+      void AsyncStorage.setItem(CITY_KEY, "All Cities");
+      void AsyncStorage.setItem(STATE_KEY, "All States");
     }
     setShowModal(false);
     setSearch("");
@@ -122,7 +147,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const currentCitiesList = useMemo(() => {
     const currentStateDoc = locations.find((l) => l.state === activeStateTab);
-    const cities = currentStateDoc ? [...currentStateDoc.cities] : [];
+    const cities = currentStateDoc ? ["All Cities", ...currentStateDoc.cities] : ["All Cities"];
     if (!cities.includes("Other")) {
       cities.push("Other");
     }
@@ -135,11 +160,13 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         selectedCity,
         selectedState,
+        selectedSubDivision,
         locations,
         isLoading,
         openLocationModal,
         closeLocationModal,
         selectLocation,
+        selectSubDivision,
         refreshLocations: loadData,
       }}
     >

@@ -11,6 +11,7 @@ export interface Masjid {
   id: string;
   name: string;
   city: string;
+  subDivision?: string;
   state?: string;
   address: string;
   adminUid: string;
@@ -19,10 +20,17 @@ export interface Masjid {
   createdAt: number;
 }
 
+export interface LocationDistrict {
+  id: string;
+  name: string;
+  subDivisions: string[];
+}
+
 export interface LocationState {
   id: string;
   state: string;
   cities: string[];
+  districts?: LocationDistrict[];
 }
 
 export interface AdminUser {
@@ -73,3 +81,20 @@ export interface AppEvent {
   imageUrl?: string;
   link?: string;
 }
+
+export interface MasjidRequest {
+  id: string;
+  masjidName: string;
+  city: string;
+  subDivision?: string;
+  state?: string;
+  address: string;
+  whatsappNumber: string;
+  email?: string;
+  notes?: string;
+  masjidPhotoBase64?: string;
+  timetablePhotoBase64?: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: number;
+}
+

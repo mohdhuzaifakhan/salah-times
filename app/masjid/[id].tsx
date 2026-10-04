@@ -1,29 +1,30 @@
-import React, { useState, useEffect } from "react";
+import { EventCard } from "@/components/EventCard";
+import { MasjidQRModal } from "@/components/MasjidQRModal";
+import { PrayerTimesCard } from "@/components/PrayerTimeCard";
+import { MasjidDetailSkeleton } from "@/components/Skeleton";
+import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
+import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
+import Colors from "@/constants/colors";
+import { useAuth } from "@/lib/auth-context";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { useLanguage } from "@/lib/language-context";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
+import { getMasjidById, getMasjidEvents } from "@/lib/store";
+import { AppEvent, Masjid, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
-  ScrollView,
-  Pressable,
-  Platform,
-  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { useLanguage } from "@/lib/language-context";
-import { getMasjidById, getMasjidEvents } from "@/lib/store";
-import { Masjid, AppEvent, PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
-import { PrayerTimesCard } from "@/components/PrayerTimeCard";
-import { EventCard } from "@/components/EventCard";
-import { MasjidDetailSkeleton } from "@/components/Skeleton";
-import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
-import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
-import { showCustomAlert } from "@/lib/custom-alert";
-import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
-import { MasjidQRModal } from "@/components/MasjidQRModal";
 
 function formatTime(time: string): string {
   if (!time || !time.includes(":")) return "--:--";
@@ -40,12 +41,18 @@ export default function MasjidDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { primaryMasjidId, selectPrimaryMasjid, openSelectModal } = usePrimaryMasjid();
+  const { admin } = useAuth();
   const [masjid, setMasjid] = useState<Masjid | null>(null);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showQRModal, setShowQRModal] = useState(false);
   const isPrimary = primaryMasjidId === id;
+  const isMasjidAdmin = Boolean(
+    admin &&
+    !admin.isTempGuest &&
+    (admin.role === "super_admin" || admin.masjidId === id)
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -172,10 +179,19 @@ export default function MasjidDetailScreen() {
           </View>
           <Text style={styles.masjidName}>{masjid.name}</Text>
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={Colors.textSecondary} style={{ marginTop: 2 }} />
-            <Text style={styles.address}>{masjid.address}, {masjid.city}</Text>
+            <Ionicons name="location-outline" size={14} color={Colors.primary} style={{ marginTop: 2 }} />
+            <Text style={styles.address}>
+              {masjid.address}{masjid.subDivision ? `, ${masjid.subDivision}` : ""}, {masjid.city}
+            </Text>
           </View>
-          
+
+          {masjid.subDivision ? (
+            <View style={styles.subDivisionHeroChip}>
+              <Ionicons name="navigate-circle-outline" size={13} color={Colors.primary} />
+              <Text style={styles.subDivisionHeroChipText}>{masjid.subDivision}</Text>
+            </View>
+          ) : null}
+
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 16 }}>
             <Pressable
               style={({ pressed }) => [
@@ -201,30 +217,59 @@ export default function MasjidDetailScreen() {
               </Text>
             </Pressable>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.setPrimaryHeroBtn,
-                { backgroundColor: "rgba(212, 168, 67, 0.12)", borderColor: Colors.accent, marginTop: 0 },
-                pressed && styles.btnPressed
-              ]}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowQRModal(true);
-              }}
-            >
-              <Ionicons name="qr-code-outline" size={15} color={Colors.accent} />
-              <Text style={[styles.setPrimaryHeroBtnText, { color: Colors.accent }]}>
-                1-Day QR Code
-              </Text>
-            </Pressable>
+            {isMasjidAdmin && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.setPrimaryHeroBtn,
+                  { backgroundColor: "rgba(212, 168, 67, 0.12)", borderColor: Colors.accent, marginTop: 0 },
+                  pressed && styles.btnPressed
+                ]}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowQRModal(true);
+                }}
+              >
+                <Ionicons name="qr-code-outline" size={15} color={Colors.accent} />
+                <Text style={[styles.setPrimaryHeroBtnText, { color: Colors.accent }]}>
+                  1-Day QR Code
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
-        <MasjidQRModal
-          visible={showQRModal}
-          masjid={masjid}
-          onClose={() => setShowQRModal(false)}
-        />
+        {isMasjidAdmin && (
+          <MasjidQRModal
+            visible={showQRModal}
+            masjid={masjid}
+            onClose={() => setShowQRModal(false)}
+          />
+        )}
+
+        {/* Single Report Incorrect Time Option (Top of Screen) */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.reportBanner,
+            pressed && styles.btnPressed,
+          ]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push({
+              pathname: "/report-masjid-time",
+              params: { masjidId: masjid.id, masjidName: masjid.name },
+            });
+          }}
+        >
+          <View style={styles.reportBannerIconContainer}>
+            <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
+          </View>
+          <View style={styles.reportBannerTextContainer}>
+            <Text style={styles.reportBannerTitle}>Report Incorrect Prayer Times</Text>
+            <Text style={styles.reportBannerSubtitle}>galat samay ke bare mein btaye</Text>
+            <Text style={styles.reportBannerHindi}>गलत समय के बारे में बताएं</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.error} />
+        </Pressable>
 
         {events.length > 0 && (
           <View style={styles.eventsSection}>
@@ -238,27 +283,8 @@ export default function MasjidDetailScreen() {
         <Text style={styles.sectionTitle}>{t('prayer_timetable')}</Text>
         <PrayerTimesCard timetable={masjid.timetable} />
 
-        <View style={styles.reportContainer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.reportBtn,
-              pressed && styles.btnPressed,
-            ]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({
-                pathname: "/report-masjid-time",
-                params: { masjidId: masjid.id, masjidName: masjid.name },
-              });
-            }}
-          >
-            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
-            <Text style={styles.reportBtnText}>Report Incorrect Prayer Times</Text>
-          </Pressable>
-        </View>
-
         <View style={{ marginTop: 24, marginBottom: 10 }}>
-          <NativeMasjidAdCard 
+          <NativeMasjidAdCard
             headline="Support Your Local Masjid's Expansion"
             body="Help fund new community spaces, Islamic classes, and educational infrastructure."
             advertiser="Masjid Renovation Fund"
@@ -343,6 +369,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     flexShrink: 1,
   },
+  subDivisionHeroChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(10, 77, 60, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(10, 77, 60, 0.18)",
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginTop: 8,
+  },
+  subDivisionHeroChipText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11.5,
+    color: Colors.primaryDark,
+  },
   sectionTitle: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 17,
@@ -384,25 +427,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#fff",
   },
-  reportContainer: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  reportBtn: {
+  reportBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(192, 57, 43, 0.08)",
+    backgroundColor: "rgba(192, 57, 43, 0.07)",
     borderWidth: 1,
-    borderColor: "rgba(192, 57, 43, 0.2)",
-    borderRadius: 12,
+    borderColor: "rgba(192, 57, 43, 0.22)",
+    borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 10
   },
-  reportBtnText: {
+  reportBannerIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(192, 57, 43, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  reportBannerTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  reportBannerTitle: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 13,
+    fontSize: 13.5,
     color: Colors.error,
+    lineHeight: 19,
+  },
+  reportBannerSubtitle: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+  },
+  reportBannerHindi: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11.5,
+    color: Colors.textSecondary,
   },
   setPrimaryHeroBtn: {
     flexDirection: "row",

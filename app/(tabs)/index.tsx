@@ -10,27 +10,28 @@ import { fuzzyMatch } from "@/lib/fuzzy-search";
 import { useLanguage } from "@/lib/language-context";
 import { useLocation } from "@/lib/location-context";
 import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
-import { getAllMasjids, getGlobalEvents, getMasjidsPaginated } from "@/lib/store";
+import { getAllMasjids, getGlobalEvents } from "@/lib/store";
 import { AppEvent, Masjid } from "@/lib/types";
-import { QueryDocumentSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { usePrayerCountdown } from "@/lib/prayer-timer";
+import { getUpcomingPrayerDetails, usePrayerCountdown } from "@/lib/prayer-timer";
 
 function formatTimeCompact(time: string): string {
   if (!time) return "";
@@ -57,7 +58,9 @@ function PrimaryMasjidCardView({ masjid, onPress }: { masjid: Masjid; onPress: (
           <Ionicons name="star" size={16} color="#fff" />
         </View>
         <View style={styles.primaryCardInfo}>
-          <Text style={styles.primaryCardLabel}>YOUR PRIMARY MASJID</Text>
+          <Text style={styles.primaryCardLabel}>
+            YOUR PRIMARY MASJID{masjid.subDivision ? ` • ${masjid.subDivision.toUpperCase()}` : ""}
+          </Text>
           <Text style={styles.primaryCardName} numberOfLines={1}>
             {masjid.name}
           </Text>
@@ -121,7 +124,15 @@ export default function ExploreScreen() {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { primaryMasjid, primaryMasjidId, openSelectModal, refreshPrimaryMasjid } = usePrimaryMasjid();
-  const { selectedCity, selectedState, locations, openLocationModal, selectLocation } = useLocation();
+  const {
+    selectedCity,
+    selectedState,
+    selectedSubDivision,
+    locations,
+    openLocationModal,
+    selectLocation,
+    selectSubDivision
+  } = useLocation();
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [search, setSearch] = useState("");
@@ -139,26 +150,53 @@ export default function ExploreScreen() {
     return set;
   }, [locations]);
 
-  const currentCity = selectedCity || "Rampur";
+  const isCityFilterActive = Boolean(
+    selectedCity &&
+    selectedCity.toLowerCase() !== "all" &&
+    selectedCity.toLowerCase() !== "all cities" &&
+    selectedCity.toLowerCase() !== "all states"
+  );
 
-  const loadInitialData = useCallback(async (searchQuery: string = search) => {
+  const availableSubDivisions = useMemo(() => {
+    if (!isCityFilterActive || !selectedCity) {
+      return [];
+    }
+
+    const targetCity = selectedCity.trim().toLowerCase();
+    const list: string[] = [];
+
+    locations.forEach((loc) => {
+      (loc.districts || []).forEach((d) => {
+        if (
+          d.name.trim().toLowerCase() === targetCity ||
+          d.id.trim().toLowerCase() === targetCity
+        ) {
+          (d.subDivisions || []).forEach((s) => {
+            if (!list.includes(s)) list.push(s);
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [locations, selectedCity, isCityFilterActive]);
+
+  useEffect(() => {
+    if (selectedSubDivision && !availableSubDivisions.includes(selectedSubDivision)) {
+      void selectSubDivision(null);
+    }
+  }, [selectedSubDivision, availableSubDivisions, selectSubDivision]);
+
+  const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
-      const [paginatedResult, eventsData] = await Promise.all([
-        getMasjidsPaginated({
-          pageSize: 20,
-          lastDoc: null,
-          city: currentCity,
-          searchQuery: searchQuery,
-          configuredCitiesSet,
-        }),
+      const [allMasjidsData, eventsData] = await Promise.all([
+        getAllMasjids(),
         getGlobalEvents(),
         refreshPrimaryMasjid(),
       ]);
 
-      setMasjids(paginatedResult.masjids);
-      setLastDocSnap(paginatedResult.lastDoc);
-      setHasMore(paginatedResult.hasMore);
+      setMasjids(allMasjidsData);
       setEvents(eventsData);
     } catch (error) {
       console.error("Failed to load data:", error);
@@ -166,66 +204,71 @@ export default function ExploreScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentCity, configuredCitiesSet, refreshPrimaryMasjid]);
+  }, [refreshPrimaryMasjid]);
 
-  // Debounced database search effect
+  // Load data on mount & focus
   useEffect(() => {
-    const handler = setTimeout(() => {
-      loadInitialData(search);
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [search, currentCity]);
+    loadInitialData();
+  }, [loadInitialData]);
 
   useFocusEffect(
     useCallback(() => {
-      loadInitialData(search);
+      loadInitialData();
     }, [loadInitialData])
   );
 
-  const loadMoreMasjids = useCallback(async () => {
-    if (loading || loadingMore || !hasMore || !lastDocSnap) return;
-
-    try {
-      setLoadingMore(true);
-      const result = await getMasjidsPaginated({
-        pageSize: 20,
-        lastDoc: lastDocSnap,
-        city: currentCity,
-        searchQuery: search,
-        configuredCitiesSet,
-      });
-
-      if (result.masjids.length > 0) {
-        setMasjids((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const newItems = result.masjids.filter((m) => !existingIds.has(m.id));
-          return [...prev, ...newItems];
-        });
-      }
-      if (result.lastDoc) {
-        setLastDocSnap(result.lastDoc);
-      }
-      setHasMore(result.hasMore);
-    } catch (error) {
-      console.error("Failed to load more masjids:", error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loading, loadingMore, hasMore, lastDocSnap, currentCity, search, configuredCitiesSet]);
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadInitialData(search);
+    await loadInitialData();
     setRefreshing(false);
   };
 
-  // Ads disabled for now
-  const filteredWithAds = useMemo(() => {
-    return masjids;
-  }, [masjids]);
+  const [sortBy, setSortBy] = useState<"earliest" | "alphabetical">("earliest");
+
+  const filteredMasjids = useMemo(() => {
+    let result = [...masjids];
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((m) =>
+        fuzzyMatch(`${m.name} ${m.city || ""} ${m.subDivision || ""} ${m.address || ""}`, q)
+      );
+    }
+
+    if (isCityFilterActive && selectedCity) {
+      const targetCity = selectedCity.trim().toLowerCase();
+      result = result.filter((m) => {
+        const mCity = m.city ? m.city.trim().toLowerCase() : "";
+        if (targetCity === "other") {
+          return !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
+        }
+        return mCity === targetCity;
+      });
+    }
+
+    if (selectedSubDivision) {
+      const targetSub = selectedSubDivision.trim().toLowerCase();
+      result = result.filter((m) => {
+        const mSub = m.subDivision ? m.subDivision.trim().toLowerCase() : "";
+        return mSub === targetSub || m.name.toLowerCase().includes(targetSub) || (m.address || "").toLowerCase().includes(targetSub);
+      });
+    }
+
+    const now = new Date();
+    if (sortBy === "earliest") {
+      result.sort((a, b) => {
+        const detailA = getUpcomingPrayerDetails(a.timetable, now);
+        const detailB = getUpcomingPrayerDetails(b.timetable, now);
+        return detailA.remainingSeconds - detailB.remainingSeconds;
+      });
+    } else {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return result;
+  }, [masjids, search, selectedCity, selectedSubDivision, isCityFilterActive, configuredCitiesSet, sortBy]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
-
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
@@ -242,7 +285,7 @@ export default function ExploreScreen() {
             >
               <Ionicons name="location" size={13} color={Colors.primary} />
               <Text style={styles.locationChipText} numberOfLines={1}>
-                {selectedCity ? `${selectedCity}, ${selectedState || ""}` : "Select Location"}
+                {selectedCity || "All Cities"}
               </Text>
               <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
             </Pressable>
@@ -287,16 +330,69 @@ export default function ExploreScreen() {
           <VoiceSearchButton onTranscript={setSearch} size={22} color={Colors.textMuted} />
         )}
       </View>
+
+      {availableSubDivisions.length > 0 && (
+        <View style={styles.subDivisionRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subDivisionScroll}
+          >
+            <Pressable
+              style={[
+                styles.subDivisionChip,
+                !selectedSubDivision && styles.subDivisionChipActive,
+              ]}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                void selectSubDivision(null);
+              }}
+            >
+              <Text
+                style={[
+                  styles.subDivisionChipText,
+                  !selectedSubDivision && styles.subDivisionChipTextActive,
+                ]}
+              >
+                All Areas
+              </Text>
+            </Pressable>
+
+            {availableSubDivisions.map((sub) => {
+              const isActive = selectedSubDivision === sub;
+              return (
+                <Pressable
+                  key={sub}
+                  style={[
+                    styles.subDivisionChip,
+                    isActive && styles.subDivisionChipActive,
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    void selectSubDivision(isActive ? null : sub);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.subDivisionChipText,
+                      isActive && styles.subDivisionChipTextActive,
+                    ]}
+                  >
+                    {sub}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
       {loading ? (
         <ExploreSkeleton />
       ) : (
         <FlatList
-          data={filteredWithAds}
+          data={filteredMasjids}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
-            // if ('isAd' in item) {
-            //   return <NativeMasjidAdCard />;
-            // }
             return (
               <MasjidCard
                 masjid={item}
@@ -346,21 +442,58 @@ export default function ExploreScreen() {
               ) : null}
 
               <View style={styles.exploreHeaderRow}>
-                <Text style={styles.subSectionTitle}>
-                  {`Masjids in ${currentCity}`}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                  <Text style={[styles.subSectionTitle, { marginTop: 0, marginBottom: 2 }]} numberOfLines={1} ellipsizeMode="tail">
+                    {isCityFilterActive
+                      ? `Masjids in ${selectedCity} (${filteredMasjids.length})`
+                      : `All Registered Masjids (${filteredMasjids.length})`}
+                  </Text>
+                  <Text style={styles.sortSubtext} numberOfLines={1} ellipsizeMode="tail">
+                    {sortBy === "earliest"
+                      ? "Sorted by earliest Jamat"
+                      : "Sorted alphabetically"}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.sortBtn,
+                      pressed && styles.btnPressed,
+                    ]}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSortBy(sortBy === "earliest" ? "alphabetical" : "earliest");
+                    }}
+                  >
+                    <Ionicons
+                      name={sortBy === "earliest" ? "time-outline" : "text-outline"}
+                      size={13}
+                      color={Colors.primary}
+                    />
+                    <Text style={styles.sortBtnText} numberOfLines={1}>
+                      {sortBy === "earliest" ? "Earliest" : "A-Z"}
+                    </Text>
+                  </Pressable>
+
+                  {isCityFilterActive && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.allCitiesBtn,
+                        pressed && styles.btnPressed,
+                      ]}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        void selectLocation("All Cities", "All States");
+                      }}
+                    >
+                      <Ionicons name="apps-outline" size={13} color={Colors.primary} style={{ marginRight: 2 }} />
+                      <Text style={styles.allCitiesBtnText} numberOfLines={1}>Show All</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             </View>
-          }
-          onEndReached={loadMoreMasjids}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={styles.footerLoader}>
-                <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.footerText}>Loading more masjids...</Text>
-              </View>
-            ) : null
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -370,23 +503,25 @@ export default function ExploreScreen() {
               <Text style={styles.emptyTitle}>
                 {search
                   ? `No masjids found matching "${search}"`
-                  : `No registered masjids in ${currentCity}`}
+                  : isCityFilterActive
+                    ? `No registered masjids in ${selectedCity}`
+                    : "No registered masjids found"}
               </Text>
               <Text style={styles.emptyText}>
-                {currentCity.toLowerCase() !== "rampur"
-                  ? "Currently, registered masjids are available in Rampur."
-                  : "Try searching for a different masjid name."}
+                {isCityFilterActive
+                  ? "Try selecting 'All Cities' to view all registered masjids across all locations."
+                  : "Try searching with a different keyword."}
               </Text>
-              {currentCity.toLowerCase() !== "rampur" && (
+              {isCityFilterActive && (
                 <Pressable
                   style={styles.switchCityBtn}
                   onPress={() => {
                     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    void selectLocation("Rampur", "Uttar Pradesh");
+                    void selectLocation("All Cities", "All States");
                   }}
                 >
-                  <Ionicons name="location" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                  <Text style={styles.switchCityBtnText}>Switch to Rampur</Text>
+                  <Ionicons name="grid" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.switchCityBtnText}>Show All Cities</Text>
                 </Pressable>
               )}
             </View>
@@ -526,7 +661,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     paddingBottom: 12,
     marginBottom: 12,
-  },
+  } as ViewStyle,
   primaryCardIconWrap: {
     width: 34,
     height: 34,
@@ -724,12 +859,44 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 8,
     marginBottom: 12,
+    gap: 8,
+  },
+  sortSubtext: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  sortBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.overlay,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    gap: 4,
+    flexShrink: 0,
+  },
+  sortBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  btnPressed: {
+    opacity: 0.7,
   },
   allCitiesBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.overlay,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    gap: 4,
+    flexShrink: 0,
   },
   allCitiesBtnText: {
     fontFamily: "Poppins_600SemiBold",
@@ -763,5 +930,33 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 12,
     color: Colors.textMuted,
+  },
+  subDivisionRow: {
+    marginBottom: 12,
+  },
+  subDivisionScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  subDivisionChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  subDivisionChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  subDivisionChipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  subDivisionChipTextActive: {
+    color: "#ffffff",
+    fontFamily: "Poppins_600SemiBold",
   },
 });

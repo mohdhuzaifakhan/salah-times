@@ -15,6 +15,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,6 +30,7 @@ interface MasjidMessage {
   phone: string;
   createdAt: number;
   messageType?: string;
+  timetablePhotoBase64?: string;
 }
 
 export default function MasjidFeedbackScreen() {
@@ -35,6 +38,7 @@ export default function MasjidFeedbackScreen() {
   const { masjidId, masjidName } = useLocalSearchParams<{ masjidId: string; masjidName?: string }>();
   const [messages, setMessages] = useState<MasjidMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     loadMessages();
@@ -172,6 +176,27 @@ export default function MasjidFeedbackScreen() {
                 <Text style={styles.messageText}>{item.message}</Text>
               )}
 
+              {/* Timetable Board Photo */}
+              {item.timetablePhotoBase64 && (
+                <View style={styles.photoContainer}>
+                  <Text style={styles.photoTitle}>Attached Timetable Board Photo:</Text>
+                  <TouchableOpacity
+                    style={styles.photoThumbWrap}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedPhoto(item.timetablePhotoBase64!);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: item.timetablePhotoBase64 }} style={styles.thumbImage} />
+                    <View style={styles.thumbOverlay}>
+                      <Ionicons name="expand" size={14} color="#FFFFFF" />
+                      <Text style={styles.thumbOverlayText}>Tap to View Full Photo</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {item.phone ? (
                 <View style={styles.contactSection}>
                   <View style={styles.phoneLabelRow}>
@@ -228,6 +253,27 @@ export default function MasjidFeedbackScreen() {
             </View>
           )}
         />
+      )}
+
+      {/* Expanded Photo Viewer Modal */}
+      {selectedPhoto && (
+        <Modal
+          visible={!!selectedPhoto}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedPhoto(null)}
+        >
+          <View style={styles.fullViewerOverlay}>
+            <TouchableOpacity
+              style={styles.fullViewerCloseBtn}
+              onPress={() => setSelectedPhoto(null)}
+            >
+              <Ionicons name="close" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.fullViewerTitle}>Submitted Timetable Board</Text>
+            <Image source={{ uri: selectedPhoto }} style={styles.fullViewerImage} />
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -455,5 +501,70 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
     color: "#ffffff",
+  },
+  photoContainer: {
+    marginBottom: 14,
+    gap: 6,
+  },
+  photoTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.text,
+  },
+  photoThumbWrap: {
+    height: 160,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "#000",
+  },
+  thumbImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  thumbOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  thumbOverlayText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: "#FFFFFF",
+  },
+  fullViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.94)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  fullViewerCloseBtn: {
+    position: "absolute",
+    top: 45,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  fullViewerTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 16,
+    color: "#FFFFFF",
+    marginBottom: 16,
+  },
+  fullViewerImage: {
+    width: "100%",
+    height: "80%",
+    resizeMode: "contain",
   },
 });

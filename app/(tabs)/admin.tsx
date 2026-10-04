@@ -19,13 +19,14 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, getAppMessages, addState, addCityToState } from "@/lib/store";
+import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, getAppMessages, addState, addDistrictToState, addSubDivisionToDistrict, deleteSubDivisionFromDistrict, deleteDistrictFromState } from "@/lib/store";
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 import { useLocation } from "@/lib/location-context";
 import { fetchAppUpdateConfig, saveAppUpdateConfig, AppUpdateConfig } from "@/lib/updates";
 import { QRScannerModal } from "@/components/QRScannerModal";
 import { MasjidQRModal } from "@/components/MasjidQRModal";
+import { ManageMasjidRequestsModal } from "@/components/ManageMasjidRequestsModal";
 import * as Clipboard from "expo-clipboard";
 
 export default function AdminScreen() {
@@ -37,6 +38,7 @@ export default function AdminScreen() {
 
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [selectedQRMasjid, setSelectedQRMasjid] = useState<Masjid | null>(null);
+  const [showMasjidRequestsModal, setShowMasjidRequestsModal] = useState(false);
 
   const [selectedResetMasjid, setSelectedResetMasjid] = useState<Masjid | null>(null);
   const [resetNewPassword, setResetNewPassword] = useState("");
@@ -138,6 +140,37 @@ export default function AdminScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [adminCityFilter, setAdminCityFilter] = useState<string>("All");
+  const [adminSubDivisionFilter, setAdminSubDivisionFilter] = useState<string>("All");
+
+  const availableAdminSubDivisions = useMemo(() => {
+    const list: string[] = ["All"];
+    if (adminCityFilter !== "All" && adminCityFilter !== "Other") {
+      const targetCity = adminCityFilter.trim().toLowerCase();
+      locations.forEach((loc) => {
+        (loc.districts || []).forEach((d) => {
+          if (
+            d.name.trim().toLowerCase() === targetCity ||
+            d.id.trim().toLowerCase() === targetCity
+          ) {
+            (d.subDivisions || []).forEach((s) => {
+              if (!list.includes(s)) list.push(s);
+            });
+          }
+        });
+      });
+    }
+
+    masjids.forEach((m) => {
+      if (
+        m.subDivision &&
+        (adminCityFilter === "All" || m.city.trim().toLowerCase() === adminCityFilter.trim().toLowerCase())
+      ) {
+        if (!list.includes(m.subDivision)) list.push(m.subDivision);
+      }
+    });
+
+    return list;
+  }, [locations, masjids, adminCityFilter]);
   const [stats, setStats] = useState({
     totalMasjids: 0,
     totalEvents: 0,
@@ -165,8 +198,10 @@ export default function AdminScreen() {
 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [newStateName, setNewStateName] = useState("");
-  const [newCityName, setNewCityName] = useState("");
+  const [newDistrictName, setNewDistrictName] = useState("");
+  const [newSubDivisionName, setNewSubDivisionName] = useState("");
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
+  const [selectedDistrictName, setSelectedDistrictName] = useState<string | null>(null);
   const [isAddingLocation, setIsAddingLocation] = useState(false);
 
   const handleAddState = async () => {
@@ -188,26 +223,64 @@ export default function AdminScreen() {
     }
   };
 
-  const handleAddCity = async () => {
-    const targetId = selectedStateId || (locations[0]?.id);
-    if (!targetId) {
+  const handleAddDistrict = async () => {
+    const targetStateId = selectedStateId || locations[0]?.id;
+    if (!targetStateId) {
       showCustomAlert("Error", "Please select or create a State first.");
       return;
     }
-    if (!newCityName.trim()) {
-      showCustomAlert("Error", "Please enter a city name.");
+    if (!newDistrictName.trim()) {
+      showCustomAlert("Error", "Please enter a district name.");
       return;
     }
     setIsAddingLocation(true);
     try {
-      await addCityToState(targetId, newCityName);
+      await addDistrictToState(targetStateId, newDistrictName.trim());
       await refreshLocations();
-      setNewCityName("");
-      showCustomAlert("Success", `Added City: ${newCityName.trim()}`);
-    } catch (e) {
-      showCustomAlert("Error", "Failed to add city.");
+      setSelectedDistrictName(newDistrictName.trim());
+      setNewDistrictName("");
+      showCustomAlert("Success", `Added District: ${newDistrictName.trim()}`);
+    } catch (e: any) {
+      showCustomAlert("Error", e.message || "Failed to add district.");
     } finally {
       setIsAddingLocation(false);
+    }
+  };
+
+  const handleAddSubDivision = async () => {
+    const targetStateId = selectedStateId || locations[0]?.id;
+    if (!targetStateId) {
+      showCustomAlert("Error", "Please select a State first.");
+      return;
+    }
+    const activeState = locations.find((l) => l.id === targetStateId) || locations[0];
+    const targetDistName = selectedDistrictName || activeState?.districts?.[0]?.name || activeState?.cities?.[0] || "Rampur";
+
+    if (!newSubDivisionName.trim()) {
+      showCustomAlert("Error", "Please enter a sub-division name.");
+      return;
+    }
+
+    setIsAddingLocation(true);
+    try {
+      await addSubDivisionToDistrict(targetStateId, targetDistName, newSubDivisionName.trim());
+      await refreshLocations();
+      setNewSubDivisionName("");
+      showCustomAlert("Success", `Added Sub-division "${newSubDivisionName.trim()}" to ${targetDistName}`);
+    } catch (e: any) {
+      showCustomAlert("Error", e.message || "Failed to add sub-division.");
+    } finally {
+      setIsAddingLocation(false);
+    }
+  };
+
+  const handleDeleteSubDivision = async (stateId: string, distName: string, subName: string) => {
+    try {
+      await deleteSubDivisionFromDistrict(stateId, distName, subName);
+      await refreshLocations();
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e: any) {
+      showCustomAlert("Error", e.message || "Failed to delete sub-division.");
     }
   };
 
@@ -364,11 +437,13 @@ export default function AdminScreen() {
   }
 
   const filteredMasjids = masjids.filter((m) => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      !searchQuery ||
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.address && m.address.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      m.name.toLowerCase().includes(q) ||
+      m.city.toLowerCase().includes(q) ||
+      (m.subDivision && m.subDivision.toLowerCase().includes(q)) ||
+      (m.address && m.address.toLowerCase().includes(q));
 
     const matchesCity = (() => {
       if (adminCityFilter === "All") return true;
@@ -378,7 +453,18 @@ export default function AdminScreen() {
       return m.city.trim().toLowerCase() === adminCityFilter.trim().toLowerCase();
     })();
 
-    return matchesSearch && matchesCity;
+    const matchesSubDivision = (() => {
+      if (adminSubDivisionFilter === "All") return true;
+      const targetSub = adminSubDivisionFilter.trim().toLowerCase();
+      const mSub = m.subDivision ? m.subDivision.trim().toLowerCase() : "";
+      return (
+        mSub === targetSub ||
+        (m.address && m.address.toLowerCase().includes(targetSub)) ||
+        m.name.toLowerCase().includes(targetSub)
+      );
+    })();
+
+    return matchesSearch && matchesCity && matchesSubDivision;
   });
 
   return (
@@ -533,6 +619,23 @@ export default function AdminScreen() {
                 <Text style={styles.actionTitle}>Publish Update</Text>
                 <Text style={styles.actionDesc}>App Store Release</Text>
               </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowMasjidRequestsModal(true);
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(37, 211, 102, 0.1)" }]}>
+                  <Ionicons name="business-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionTitle}>Masjid Requests</Text>
+                <Text style={styles.actionDesc}>User submissions</Text>
+              </Pressable>
             </View>
 
             {/* Directory Header and Search Bar */}
@@ -560,7 +663,7 @@ export default function AdminScreen() {
               )}
             </View>
 
-            {/* Location Filter Chips Bar */}
+            {/* Location City Filter Chips Bar */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminCityScroll}>
               {allCitiesList.map((c) => {
                 const isSel = adminCityFilter === c;
@@ -571,6 +674,7 @@ export default function AdminScreen() {
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setAdminCityFilter(c);
+                      setAdminSubDivisionFilter("All");
                     }}
                   >
                     <Ionicons
@@ -586,6 +690,52 @@ export default function AdminScreen() {
                 );
               })}
             </ScrollView>
+
+            {/* Sub-division Filter Chips Bar */}
+            {availableAdminSubDivisions.length > 1 && (
+              <View style={{ marginTop: 8, marginBottom: 12 }}>
+                <View style={styles.subFilterHeaderRow}>
+                  <Ionicons name="navigate-outline" size={13} color={Colors.accent} />
+                  <Text style={styles.subFilterLabel}>
+                    Sub-divisions {adminCityFilter !== "All" ? `in ${adminCityFilter}` : ""}:
+                  </Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminCityScroll}>
+                  {availableAdminSubDivisions.map((sub) => {
+                    const isSel = adminSubDivisionFilter === sub;
+                    const subCount = sub === "All"
+                      ? masjids.filter((m) => adminCityFilter === "All" || m.city.trim().toLowerCase() === adminCityFilter.trim().toLowerCase()).length
+                      : masjids.filter((m) => {
+                          const mCityMatches = adminCityFilter === "All" || m.city.trim().toLowerCase() === adminCityFilter.trim().toLowerCase();
+                          const mSubMatches = (m.subDivision && m.subDivision.trim().toLowerCase() === sub.trim().toLowerCase()) ||
+                            (m.address && m.address.toLowerCase().includes(sub.trim().toLowerCase()));
+                          return mCityMatches && mSubMatches;
+                        }).length;
+
+                    return (
+                      <TouchableOpacity
+                        key={sub}
+                        style={[styles.adminSubChip, isSel && styles.adminSubChipActive]}
+                        onPress={() => {
+                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setAdminSubDivisionFilter(sub);
+                        }}
+                      >
+                        <Ionicons
+                          name="navigate-circle-outline"
+                          size={12}
+                          color={isSel ? "#FFFFFF" : Colors.accent}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={[styles.adminSubChipText, isSel && styles.adminSubChipTextActive]}>
+                          {sub} ({subCount})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             {/* Masjid Cards List */}
             {filteredMasjids.length === 0 ? (
@@ -614,9 +764,15 @@ export default function AdminScreen() {
                         <View style={styles.locationRow}>
                           <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
                           <Text style={styles.masjidLocation} numberOfLines={1}>
-                            {item.address}, {item.city}
+                            {item.address}{item.subDivision ? `, ${item.subDivision}` : ""}, {item.city}
                           </Text>
                         </View>
+                        {item.subDivision ? (
+                          <View style={styles.superMasjidSubBadge}>
+                            <Ionicons name="navigate-outline" size={10} color={Colors.primary} />
+                            <Text style={styles.superMasjidSubBadgeText}>{item.subDivision}</Text>
+                          </View>
+                        ) : null}
                         {item.adminEmail && (
                           <View style={styles.emailRow}>
                             <Ionicons name="mail-outline" size={12} color={Colors.textMuted} />
@@ -851,20 +1007,26 @@ export default function AdminScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Manage States & Cities</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Location Hierarchy Manager</Text>
+                <Text style={styles.modalSubtitle}>Manage States, Districts & Sub-divisions</Text>
+              </View>
               <TouchableOpacity onPress={() => setShowLocationModal(false)} style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-              {/* Add State Form */}
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 80, 100) }}
+            >
+              {/* 1. Add State Form */}
               <View style={styles.locFormCard}>
-                <Text style={styles.locFormTitle}>Add New State</Text>
+                <Text style={styles.locFormTitle}>1. Add State</Text>
                 <View style={styles.locFormRow}>
                   <TextInput
                     style={styles.locInput}
-                    placeholder="e.g. Maharashtra"
+                    placeholder="e.g. Uttar Pradesh"
                     placeholderTextColor={Colors.textMuted}
                     value={newStateName}
                     onChangeText={setNewStateName}
@@ -883,9 +1045,9 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              {/* Add City Form */}
+              {/* 2. Add District Form */}
               <View style={styles.locFormCard}>
-                <Text style={styles.locFormTitle}>Add City to State</Text>
+                <Text style={styles.locFormTitle}>2. Add District to State</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
                   {locations.map((loc) => {
                     const isSel = (selectedStateId || locations[0]?.id) === loc.id;
@@ -893,7 +1055,10 @@ export default function AdminScreen() {
                       <TouchableOpacity
                         key={loc.id}
                         style={[styles.locStateChip, isSel && styles.locStateChipActive]}
-                        onPress={() => setSelectedStateId(loc.id)}
+                        onPress={() => {
+                          setSelectedStateId(loc.id);
+                          setSelectedDistrictName(loc.districts?.[0]?.name || loc.cities?.[0] || null);
+                        }}
                       >
                         <Text style={[styles.locStateChipText, isSel && styles.locStateChipTextActive]}>
                           {loc.state}
@@ -905,41 +1070,121 @@ export default function AdminScreen() {
                 <View style={styles.locFormRow}>
                   <TextInput
                     style={styles.locInput}
-                    placeholder="e.g. Mumbai, Pune..."
+                    placeholder="e.g. Rampur, Moradabad..."
                     placeholderTextColor={Colors.textMuted}
-                    value={newCityName}
-                    onChangeText={setNewCityName}
+                    value={newDistrictName}
+                    onChangeText={setNewDistrictName}
                   />
                   <TouchableOpacity
                     style={[styles.locAddBtn, isAddingLocation && styles.btnDisabled]}
-                    onPress={handleAddCity}
+                    onPress={handleAddDistrict}
                     disabled={isAddingLocation}
                   >
                     {isAddingLocation ? (
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
-                      <Text style={styles.locAddBtnText}>Add City</Text>
+                      <Text style={styles.locAddBtnText}>Add District</Text>
                     )}
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* List Current States & Cities */}
-              <Text style={[styles.sectionHeaderTitle, { marginTop: 12 }]}>Configured Locations</Text>
+              {/* 3. Add Sub-division Form */}
+              <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>3. Add Sub-division to District</Text>
+                {(() => {
+                  const currentStateObj = locations.find((l) => l.id === (selectedStateId || locations[0]?.id));
+                  const distList = currentStateObj?.districts || [];
+                  return (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                      {distList.map((d) => {
+                        const isSel = (selectedDistrictName || distList[0]?.name) === d.name;
+                        return (
+                          <TouchableOpacity
+                            key={d.id}
+                            style={[styles.locStateChip, isSel && styles.locStateChipActive]}
+                            onPress={() => setSelectedDistrictName(d.name)}
+                          >
+                            <Text style={[styles.locStateChipText, isSel && styles.locStateChipTextActive]}>
+                              {d.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  );
+                })()}
+                <View style={styles.locFormRow}>
+                  <TextInput
+                    style={styles.locInput}
+                    placeholder="e.g. Rampur city, Tanda, Suar, Bilaspur..."
+                    placeholderTextColor={Colors.textMuted}
+                    value={newSubDivisionName}
+                    onChangeText={setNewSubDivisionName}
+                  />
+                  <TouchableOpacity
+                    style={[styles.locAddBtn, isAddingLocation && styles.btnDisabled]}
+                    onPress={handleAddSubDivision}
+                    disabled={isAddingLocation}
+                  >
+                    {isAddingLocation ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.locAddBtnText}>Add Sub-division</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Configured Locations Hierarchy List */}
+              <Text style={[styles.sectionHeaderTitle, { marginTop: 12 }]}>Configured Hierarchy</Text>
               {locations.map((loc) => (
                 <View key={loc.id} style={styles.locListCard}>
-                  <Text style={styles.locListStateName}>{loc.state}</Text>
-                  <View style={styles.locCitiesWrap}>
-                    {loc.cities.length > 0 ? (
-                      loc.cities.map((c) => (
-                        <View key={c} style={styles.locCityBadge}>
-                          <Text style={styles.locCityText}>{c}</Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noCitiesText}>No cities added yet.</Text>
-                    )}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Ionicons name="map-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.locListStateName}>{loc.state}</Text>
                   </View>
+
+                  {(loc.districts || []).map((dist) => (
+                    <View key={dist.id} style={styles.districtHierarchyBox}>
+                      <View style={styles.districtHeaderRow}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons name="location" size={14} color={Colors.accent} />
+                          <Text style={{ fontFamily: "Poppins_600SemiBold", fontSize: 13, color: Colors.text }}>
+                            District: <Text style={{ fontFamily: "Poppins_700Bold", color: Colors.primary }}>{dist.name}</Text>
+                          </Text>
+                        </View>
+                        <View style={styles.subCountBadge}>
+                          <Text style={styles.subCountBadgeText}>
+                            {dist.subDivisions?.length || 0} sub-divisions
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.locCitiesWrap}>
+                        {dist.subDivisions && dist.subDivisions.length > 0 ? (
+                          dist.subDivisions.map((sub) => (
+                            <View key={sub} style={styles.subDivisionChipModern}>
+                              <Ionicons name="navigate-circle-outline" size={14} color={Colors.primary} />
+                              <Text style={styles.subDivisionChipText}>{sub}</Text>
+                              <TouchableOpacity
+                                style={styles.subChipDeleteBtn}
+                                onPress={() => handleDeleteSubDivision(loc.id, dist.name, sub)}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Ionicons name="close-circle" size={15} color={Colors.error} />
+                              </TouchableOpacity>
+                            </View>
+                          ))
+                        ) : (
+                          <View style={styles.noSubDivisionsBox}>
+                            <Ionicons name="alert-circle-outline" size={14} color={Colors.textMuted} />
+                            <Text style={styles.noCitiesText}>No sub-divisions added yet.</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))}
                 </View>
               ))}
             </ScrollView>
@@ -1149,6 +1394,11 @@ export default function AdminScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ManageMasjidRequestsModal
+        visible={showMasjidRequestsModal}
+        onClose={() => setShowMasjidRequestsModal(false)}
+      />
     </View>
   );
 }
@@ -1658,8 +1908,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "85%",
-    minHeight: "65%",
+    maxHeight: "90%",
+    minHeight: "50%",
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -1768,7 +2018,72 @@ const styles = StyleSheet.create({
   locCitiesWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  districtHierarchyBox: {
+    marginTop: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    paddingVertical: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.accent,
+    backgroundColor: "rgba(10, 77, 60, 0.03)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  districtHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  subCountBadge: {
+    backgroundColor: "rgba(212, 168, 67, 0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(212, 168, 67, 0.25)",
+  },
+  subCountBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
+    color: Colors.accent,
+  },
+  subDivisionChipModern: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(10, 77, 60, 0.2)",
+    borderRadius: 20,
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 5,
     gap: 6,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  subDivisionChipText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primaryDark,
+  },
+  subChipDeleteBtn: {
+    padding: 2,
+    borderRadius: 10,
+    backgroundColor: "rgba(192, 57, 43, 0.08)",
+  },
+  noSubDivisionsBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
   },
   locCityBadge: {
     backgroundColor: Colors.overlay,
@@ -2054,5 +2369,59 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: "#fff",
+  },
+  subFilterHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  subFilterLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  adminSubChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: "rgba(212, 168, 67, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(212, 168, 67, 0.22)",
+    marginRight: 6,
+  },
+  adminSubChipActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  adminSubChipText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11.5,
+    color: Colors.accent,
+  },
+  adminSubChipTextActive: {
+    color: "#FFFFFF",
+    fontFamily: "Poppins_600SemiBold",
+  },
+  superMasjidSubBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: Colors.overlay,
+    borderWidth: 1,
+    borderColor: "rgba(10, 77, 60, 0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  superMasjidSubBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
+    color: Colors.primary,
   },
 });

@@ -12,7 +12,7 @@ import { getAlarmSettings, PrayerKey } from "./alarm-settings";
 import { getMasjidById, getPrimaryMasjidId } from "./store";
 import { Masjid } from "./types";
 
-const LOCAL_AZAAN_ASSET = require("../assets/sounds/Sharif-Doman.mp3");
+const LOCAL_AZAAN_ASSET = require("../assets/sounds/new-audio.mpeg");
 
 interface AlarmState {
   isPlaying: boolean;
@@ -204,6 +204,11 @@ export async function triggerPrayerAlarm(
       { shouldPlay: true, volume: 1.0, isLooping: false }
     );
     activeSound = sound;
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        void stopPrayerAlarm();
+      }
+    });
     await sound.playAsync();
   } catch (err) {
     console.warn("[Notifications] expo-av Audio play error:", err);
