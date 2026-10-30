@@ -45,8 +45,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   waqfText: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 10,
-    fontWeight: 'bold',
     marginBottom: -2,
   },
   badgeWrap: {

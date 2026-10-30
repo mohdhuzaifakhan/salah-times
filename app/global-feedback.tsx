@@ -1,22 +1,21 @@
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import Colors from "@/constants/colors";
+import { useAuth } from "@/lib/auth-context";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { createAppMessage } from "@/lib/store";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
-  View,
   TextInput,
-  Pressable,
-  ActivityIndicator,
-  Platform,
+  View
 } from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
-import { createAppMessage } from "@/lib/store";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { useAuth } from "@/lib/auth-context";
 
 const CATEGORIES = [
   {
@@ -100,7 +99,7 @@ export default function GlobalFeedbackScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 60 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

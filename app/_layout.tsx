@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import CustomAlertModal from "@/components/CustomAlertModal";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppUpdateChecker from "@/components/AppUpdateChecker";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -42,7 +43,18 @@ void SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false, headerBackTitle: "Back" }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="prayer-times" options={{ headerShown: false }} />
+      <Stack.Screen name="qibla" options={{ headerShown: false }} />
+      <Stack.Screen name="nearby-masjids" options={{ headerShown: false }} />
+      <Stack.Screen name="tasbih" options={{ headerShown: false }} />
+      <Stack.Screen name="duas" options={{ headerShown: false }} />
+      <Stack.Screen name="fasting" options={{ headerShown: false }} />
+      <Stack.Screen name="news" options={{ headerShown: false }} />
+      <Stack.Screen name="community" options={{ headerShown: false }} />
       <Stack.Screen
         name="masjid/[id]"
         options={{ headerShown: false }}
@@ -115,6 +127,12 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="manage-news"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="event/[id]"
         options={{
           headerShown: false,
@@ -158,7 +176,8 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ErrorBoundary>
+    <SafeAreaProvider>
+      <ErrorBoundary>
       <StatusBar style="dark" backgroundColor={Colors.background} />
       <AuthProvider>
         <LanguageProvider>
@@ -183,6 +202,7 @@ export default function RootLayout() {
         </LanguageProvider>
       </AuthProvider>
     </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 

@@ -1,27 +1,27 @@
-import React, { useState, useCallback } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  Platform,
-  Image,
-} from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
-import * as ImagePicker from "expo-image-picker";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
-import * as Haptics from "expo-haptics";
+import { EventCard } from "@/components/EventCard";
+import { ImageViewerModal } from "@/components/ImageViewerModal";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
-import { getGlobalEvents, getMasjidEvents, createEvent, updateEvent, deleteEvent } from "@/lib/store";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { createEvent, deleteEvent, getGlobalEvents, getMasjidEvents, updateEvent } from "@/lib/store";
 import { AppEvent } from "@/lib/types";
-import { EventCard } from "@/components/EventCard";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { ImageViewerModal } from "@/components/ImageViewerModal";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const EXPIRY_OPTIONS = [
   { label: "1 Day", hours: 24 },
@@ -34,10 +34,10 @@ export default function ManageEventsScreen() {
   const masjidId = typeof params.masjidId === "string" ? params.masjidId : (Array.isArray(params.masjidId) ? params.masjidId[0] : "global");
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
-  
+
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [link, setLink] = useState("");
@@ -220,7 +220,7 @@ export default function ManageEventsScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 60 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -237,7 +237,7 @@ export default function ManageEventsScreen() {
               </Pressable>
             )}
           </View>
-          
+
           <Text style={styles.label}>Title</Text>
           <TextInput
             style={styles.input}

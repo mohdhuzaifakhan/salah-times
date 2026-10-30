@@ -1,26 +1,26 @@
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  Platform,
-  Share,
-  Image,
-  Linking,
-} from "react-native";
-import { showCustomAlert } from "@/lib/custom-alert";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import * as Haptics from "expo-haptics";
+import { ImageViewerModal } from "@/components/ImageViewerModal";
 import Colors from "@/constants/colors";
+import { showCustomAlert } from "@/lib/custom-alert";
 import { useLanguage } from "@/lib/language-context";
 import { getEventById, getMasjidById } from "@/lib/store";
 import { AppEvent, Masjid } from "@/lib/types";
-import { ImageViewerModal } from "@/components/ImageViewerModal";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EventDetailScreen() {
   const { t } = useLanguage();
@@ -158,7 +158,7 @@ export default function EventDetailScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         {event.imageUrl ? (
@@ -435,7 +435,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   noDescription: {
-    fontFamily: "Poppins_400Regular_Italic",
+    fontFamily: "Poppins_400Regular",
+    fontStyle: "italic",
     fontSize: 14,
     color: Colors.textMuted,
     marginBottom: 20,

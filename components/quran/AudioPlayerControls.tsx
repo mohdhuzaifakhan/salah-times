@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -25,7 +25,7 @@ const AudioPlayerControls: React.FC<AudioPlayerControlsProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(16, insets.bottom) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) + 10 }]}>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{title || 'Playing Audio'}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>{subtitle || 'Recitation'}</Text>

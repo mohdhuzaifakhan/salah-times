@@ -145,7 +145,7 @@ export default function MasjidFeedbackScreen() {
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 24) + 50 }]}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.typeBadgeContainer}>

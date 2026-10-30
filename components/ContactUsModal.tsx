@@ -214,11 +214,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 20,
     maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
   },
   header: {
     flexDirection: 'row',

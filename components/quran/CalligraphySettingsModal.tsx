@@ -1,20 +1,21 @@
+import Colors from '@/constants/colors';
+import { QuranLineSpacing, QuranScriptFont, useQuran } from '@/lib/quran/context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { Check, Type } from 'lucide-react-native';
 import React from 'react';
 import {
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
+  Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
-  Platform,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Type, Check } from 'lucide-react-native';
-import Colors from '@/constants/colors';
-import { useQuran, QuranScriptFont, QuranLineSpacing } from '@/lib/quran/context';
-import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface CalligraphySettingsModalProps {
   visible: boolean;
@@ -49,6 +50,7 @@ export const LINE_SPACINGS: { id: QuranLineSpacing; label: string; multiplier: n
 ];
 
 export function CalligraphySettingsModal({ visible, onClose }: CalligraphySettingsModalProps) {
+  const insets = useSafeAreaInsets();
   const { preferences, updatePreferences } = useQuran();
 
   const handleFontSelect = (fontId: QuranScriptFont) => {
@@ -78,7 +80,13 @@ export function CalligraphySettingsModal({ visible, onClose }: CalligraphySettin
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.contentCard} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[
+            styles.contentCard,
+            { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) + 16 },
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
           {/* Header Bar */}
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
@@ -164,7 +172,7 @@ export function CalligraphySettingsModal({ visible, onClose }: CalligraphySettin
             {/* Font Size & Line Spacing */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sizing & Line Spacing</Text>
-              
+
               {/* Font Size Controls */}
               <View style={styles.sizeControlRow}>
                 <Text style={styles.controlLabel}>Font Size</Text>
@@ -212,7 +220,7 @@ export function CalligraphySettingsModal({ visible, onClose }: CalligraphySettin
             {/* Non-Arabic Reciter Helper Toggles */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Recitation Helpers</Text>
-              
+
               {/* Transliteration Toggle */}
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextContainer}>

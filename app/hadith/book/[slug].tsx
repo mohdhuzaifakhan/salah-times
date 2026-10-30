@@ -1,24 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  StatusBar,
-  TextInput,
-  Platform
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/colors';
-import { fetchHadithByNumber, BOOKS } from '@/lib/hadith/api';
-import { addHadithBookmark, removeHadithBookmark, updateRecentHadith } from '@/lib/hadith/db';
-import { useHadith } from '@/lib/hadith/context';
-import { useLanguage } from '@/lib/language-context';
 import HadithItem from '@/components/hadith/HadithItem';
+import Colors from '@/constants/colors';
+import { BOOKS, fetchHadithByNumber } from '@/lib/hadith/api';
+import { useHadith } from '@/lib/hadith/context';
+import { addHadithBookmark, removeHadithBookmark } from '@/lib/hadith/db';
+import { useLanguage } from '@/lib/language-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const LazyHadithItem = ({ number, slug, bookName, isBookmarked, onBookmark, fontSize, showArabic, language }: any) => {
   const [hadith, setHadith] = useState<any>(null);
@@ -53,7 +53,7 @@ const LazyHadithItem = ({ number, slug, bookName, isBookmarked, onBookmark, font
   if (!hadith) return null;
 
   return (
-    <HadithItem 
+    <HadithItem
       hadith={hadith}
       bookName={bookName}
       isBookmarked={isBookmarked}
@@ -125,7 +125,7 @@ export default function HadithListScreen() {
       <View style={styles.content}>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color={Colors.textMuted} />
-          <TextInput 
+          <TextInput
             style={styles.searchInput}
             placeholder="Search by number..."
             value={search}
@@ -138,7 +138,7 @@ export default function HadithListScreen() {
           data={numbers}
           keyExtractor={(item) => item.toString()}
           renderItem={({ item }) => (
-            <LazyHadithItem 
+            <LazyHadithItem
               number={item}
               slug={String(slug)}
               bookName={bookInfo.name}
@@ -152,7 +152,7 @@ export default function HadithListScreen() {
           initialNumToRender={5}
           maxToRenderPerBatch={5}
           windowSize={3}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
           removeClippedSubviews={true}
         />
       </View>

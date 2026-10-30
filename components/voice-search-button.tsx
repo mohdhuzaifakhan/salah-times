@@ -16,13 +16,15 @@ import { useVoiceSearch } from "@/hooks/use-voice-search";
 import * as Haptics from "expo-haptics";
 
 interface VoiceSearchButtonProps {
-  onTranscript: (text: string) => void;
+  onTranscript?: (text: string) => void;
+  onSearch?: (text: string) => void;
   size?: number;
   color?: string;
 }
 
 export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
   onTranscript,
+  onSearch,
   size = 20,
   color = Colors.primary,
 }) => {
@@ -47,7 +49,10 @@ export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
     const finalQuery = manualText.trim() || transcript.trim();
     if (finalQuery) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onTranscript(finalQuery);
+      const callback = onTranscript || onSearch;
+      if (callback) {
+        callback(finalQuery);
+      }
     }
     await stopListening();
     setModalVisible(false);
@@ -178,11 +183,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
     position: "relative",
   },
   topCloseBtn: {

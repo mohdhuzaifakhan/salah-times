@@ -6,7 +6,7 @@ import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { fetchQuranPage, getAudioUrl, stripBismillahIfPresent, SurahDetail } from '@/lib/quran/api';
 import { SURA_START_PAGES } from '@/lib/quran/constants';
 import { useQuran } from '@/lib/quran/context';
-import { addBookmark, removeBookmark } from '@/lib/quran/db';
+import { addBookmark, removeBookmark, saveLastReadPage, updateRecentRead } from '@/lib/quran/db';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
@@ -95,6 +95,14 @@ export default function SurahDetailScreen() {
 
       setSurah(initialSurah);
       setLoading(false);
+
+      // Track reading progress in local cache & history
+      void saveLastReadPage(startPage);
+      void updateRecentRead({
+        surahNumber: mapping.number,
+        ayahNumber: 1,
+        surahName: mapping.englishName,
+      });
 
       // Background fetch remaining pages of the Surah
       if (endPage > startPage) {

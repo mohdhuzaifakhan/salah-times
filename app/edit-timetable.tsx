@@ -15,10 +15,24 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
 import { getMasjidById, updateMasjidTimetable } from "@/lib/store";
-import { Timetable, PRAYER_NAMES, PRAYER_ORDER, DEFAULT_TIMETABLE } from "@/lib/types";
+import {
+  Timetable,
+  PRAYER_NAMES,
+  PRAYER_ORDER,
+  RAMADAN_TIMES_ORDER,
+  OTHER_TIMES_ORDER,
+  DEFAULT_TIMETABLE,
+} from "@/lib/types";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { refreshPrimaryMasjidNotifications } from "@/lib/notifications";
+
+const ALL_TIMETABLE_KEYS: (keyof Timetable)[] = [
+  ...PRAYER_ORDER,
+  ...RAMADAN_TIMES_ORDER,
+  ...OTHER_TIMES_ORDER,
+];
 
 const PRAYER_ICONS: Record<string, string> = {
   fajr: "sunny-outline",
@@ -27,6 +41,14 @@ const PRAYER_ICONS: Record<string, string> = {
   maghrib: "cloudy-night",
   isha: "moon",
   jummah: "people",
+  sunrise: "sunny-outline",
+  ishraq: "sunny",
+  chasht: "partly-sunny-outline",
+  zawal: "alert-circle-outline",
+  tahajjud: "moon-outline",
+  sehri: "alarm-outline",
+  iftar: "restaurant-outline",
+  taraweeh: "book-outline",
 };
 
 interface FormTime {
@@ -39,8 +61,8 @@ type FormTimetable = Record<keyof Timetable, FormTime>;
 // Helper: Convert 24-hour database times to 12-hour form state
 const convert24ToForm = (timetable24: Timetable): FormTimetable => {
   const form: Partial<FormTimetable> = {};
-  for (const key of PRAYER_ORDER) {
-    const time24 = (timetable24 && timetable24[key]) || DEFAULT_TIMETABLE[key];
+  for (const key of ALL_TIMETABLE_KEYS) {
+    const time24 = (timetable24 && timetable24[key]) || DEFAULT_TIMETABLE[key] || "12:00";
     const [h, m] = time24 && time24.includes(":") ? time24.split(":") : ["12", "00"];
     const hour24 = parseInt(h, 10);
     const ampm = hour24 >= 12 ? "PM" : "AM";
@@ -57,7 +79,8 @@ const convert24ToForm = (timetable24: Timetable): FormTimetable => {
 // Helper: Convert 12-hour form state to 24-hour database times
 const convertFormTo24 = (form: FormTimetable): Timetable => {
   const timetable24: Partial<Timetable> = {};
-  for (const key of PRAYER_ORDER) {
+  for (const key of ALL_TIMETABLE_KEYS) {
+    if (!form[key]) continue;
     const { time, ampm } = form[key];
     const [h, m] = time.split(":");
     let hour = parseInt(h, 10);
@@ -76,6 +99,7 @@ export default function EditTimetableScreen() {
   const { masjidId } = useLocalSearchParams<{ masjidId: string }>();
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
+  const { primaryMasjid, refreshPrimaryMasjid } = usePrimaryMasjid();
   const [formTimetable, setFormTimetable] = useState<FormTimetable | null>(null);
   const [masjidName, setMasjidName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -156,7 +180,8 @@ export default function EditTimetableScreen() {
     }
 
     // Validate 12-hour formatted inputs
-    for (const prayer of PRAYER_ORDER) {
+    for (const prayer of ALL_TIMETABLE_KEYS) {
+      if (!formTimetable[prayer]) continue;
       const { time } = formTimetable[prayer];
       if (!/^\d{2}:\d{2}$/.test(time)) {
         showCustomAlert("Invalid Time", `Please enter a valid time for ${PRAYER_NAMES[prayer]} (HH:MM format).`);
@@ -178,7 +203,10 @@ export default function EditTimetableScreen() {
         return;
       }
 
-      // Automatically refresh local notifications if this is the user's primary masjid
+      // Automatically refresh primary masjid & local notifications if this is the user's primary masjid
+      if (primaryMasjid?.id === masjidId) {
+        await refreshPrimaryMasjid();
+      }
       await refreshPrimaryMasjidNotifications();
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -214,7 +242,7 @@ export default function EditTimetableScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 40 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -222,13 +250,17 @@ export default function EditTimetableScreen() {
         <Text style={styles.title}>Edit Timetable</Text>
         <Text style={styles.subtitle}>{masjidName}</Text>
 
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="time-outline" size={16} color={Colors.primary} />
+          <Text style={styles.sectionHeading}>Daily Prayers & Jummah</Text>
+        </View>
         <View style={styles.card}>
           {PRAYER_ORDER.map((prayer) => (
             <View key={prayer} style={styles.row}>
               <View style={styles.rowLeft}>
                 <View style={styles.iconCircle}>
                   <Ionicons
-                    name={PRAYER_ICONS[prayer] as any}
+                    name={(PRAYER_ICONS[prayer] || "time-outline") as any}
                     size={18}
                     color={Colors.primary}
                   />
@@ -239,7 +271,7 @@ export default function EditTimetableScreen() {
               <View style={styles.timeContainer}>
                 <TextInput
                   style={styles.timeInput}
-                  value={formTimetable[prayer].time}
+                  value={formTimetable[prayer]?.time || "12:00"}
                   onChangeText={(v) => updateFormTime(prayer, v)}
                   keyboardType="number-pad"
                   placeholder="12:00"
@@ -251,25 +283,145 @@ export default function EditTimetableScreen() {
                   <Pressable
                     style={[
                       styles.ampmButton,
-                      formTimetable[prayer].ampm === "AM" && styles.ampmActive,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActive,
                     ]}
                     onPress={() => toggleAMPM(prayer, "AM")}
                   >
                     <Text style={[
                       styles.ampmText,
-                      formTimetable[prayer].ampm === "AM" && styles.ampmActiveText,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActiveText,
                     ]}>AM</Text>
                   </Pressable>
                   <Pressable
                     style={[
                       styles.ampmButton,
-                      formTimetable[prayer].ampm === "PM" && styles.ampmActive,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActive,
                     ]}
                     onPress={() => toggleAMPM(prayer, "PM")}
                   >
                     <Text style={[
                       styles.ampmText,
-                      formTimetable[prayer].ampm === "PM" && styles.ampmActiveText,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActiveText,
+                    ]}>PM</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="moon" size={16} color={Colors.primary} />
+          <Text style={styles.sectionHeading}>Ramadan Timings</Text>
+        </View>
+        <View style={styles.card}>
+          {RAMADAN_TIMES_ORDER.map((prayer) => (
+            <View key={prayer} style={styles.row}>
+              <View style={styles.rowLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons
+                    name={(PRAYER_ICONS[prayer] || "time-outline") as any}
+                    size={18}
+                    color={Colors.primary}
+                  />
+                </View>
+                <Text style={styles.prayerName}>{PRAYER_NAMES[prayer]}</Text>
+              </View>
+
+              <View style={styles.timeContainer}>
+                <TextInput
+                  style={styles.timeInput}
+                  value={formTimetable[prayer]?.time || "12:00"}
+                  onChangeText={(v) => updateFormTime(prayer, v)}
+                  keyboardType="number-pad"
+                  placeholder="12:00"
+                  placeholderTextColor={Colors.textMuted}
+                  maxLength={5}
+                />
+
+                <View style={styles.ampmContainer}>
+                  <Pressable
+                    style={[
+                      styles.ampmButton,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActive,
+                    ]}
+                    onPress={() => toggleAMPM(prayer, "AM")}
+                  >
+                    <Text style={[
+                      styles.ampmText,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActiveText,
+                    ]}>AM</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.ampmButton,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActive,
+                    ]}
+                    onPress={() => toggleAMPM(prayer, "PM")}
+                  >
+                    <Text style={[
+                      styles.ampmText,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActiveText,
+                    ]}>PM</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="sunny" size={16} color="#E67E22" />
+          <Text style={styles.sectionHeading}>Other Timings (Sunnah & Nafl)</Text>
+        </View>
+        <View style={styles.card}>
+          {OTHER_TIMES_ORDER.map((prayer) => (
+            <View key={prayer} style={styles.row}>
+              <View style={styles.rowLeft}>
+                <View style={styles.iconCircle}>
+                  <Ionicons
+                    name={(PRAYER_ICONS[prayer] || "time-outline") as any}
+                    size={18}
+                    color={Colors.primary}
+                  />
+                </View>
+                <Text style={styles.prayerName}>{PRAYER_NAMES[prayer]}</Text>
+              </View>
+
+              <View style={styles.timeContainer}>
+                <TextInput
+                  style={styles.timeInput}
+                  value={formTimetable[prayer]?.time || "12:00"}
+                  onChangeText={(v) => updateFormTime(prayer, v)}
+                  keyboardType="number-pad"
+                  placeholder="12:00"
+                  placeholderTextColor={Colors.textMuted}
+                  maxLength={5}
+                />
+
+                <View style={styles.ampmContainer}>
+                  <Pressable
+                    style={[
+                      styles.ampmButton,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActive,
+                    ]}
+                    onPress={() => toggleAMPM(prayer, "AM")}
+                  >
+                    <Text style={[
+                      styles.ampmText,
+                      formTimetable[prayer]?.ampm === "AM" && styles.ampmActiveText,
+                    ]}>AM</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.ampmButton,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActive,
+                    ]}
+                    onPress={() => toggleAMPM(prayer, "PM")}
+                  >
+                    <Text style={[
+                      styles.ampmText,
+                      formTimetable[prayer]?.ampm === "PM" && styles.ampmActiveText,
                     ]}>PM</Text>
                   </Pressable>
                 </View>
@@ -328,6 +480,19 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: "center",
     marginBottom: 20,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 18,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionHeading: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: Colors.primaryDark,
   },
   card: {
     backgroundColor: Colors.surface,

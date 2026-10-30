@@ -23,7 +23,7 @@ import { getAllMasjids, getMasjidById, getAdminNotifications, getGlobalEvents, g
 import { Masjid } from "@/lib/types";
 import { PrayerTimesCard } from "@/components/PrayerTimeCard";
 import { useLocation } from "@/lib/location-context";
-import { fetchAppUpdateConfig, saveAppUpdateConfig, AppUpdateConfig } from "@/lib/updates";
+import { fetchAppUpdateConfig, saveAppUpdateConfig, AppUpdateConfig, CURRENT_VERSION, DEFAULT_UPDATE_CONFIG } from "@/lib/updates";
 import { QRScannerModal } from "@/components/QRScannerModal";
 import { MasjidQRModal } from "@/components/MasjidQRModal";
 import { ManageMasjidRequestsModal } from "@/components/ManageMasjidRequestsModal";
@@ -91,15 +91,19 @@ export default function AdminScreen() {
   const [releaseMinVersion, setReleaseMinVersion] = useState("1.0.0");
   const [releaseNotesText, setReleaseNotesText] = useState("Performance improvements\nGeneral bug fixes");
   const [releaseEnabled, setReleaseEnabled] = useState(true);
+  const [releaseStoreUrl, setReleaseStoreUrl] = useState(DEFAULT_UPDATE_CONFIG.playStoreUrl);
+  const [releaseNotifyUsers, setReleaseNotifyUsers] = useState(true);
   const [isSavingRelease, setIsSavingRelease] = useState(false);
 
   const handleOpenReleaseModal = async () => {
     try {
-      const config = await fetchAppUpdateConfig();
+      const config = await fetchAppUpdateConfig(true);
       setReleaseLatestVersion(config.latestVersion || "1.0.0");
       setReleaseMinVersion(config.minVersion || "1.0.0");
       setReleaseNotesText((config.releaseNotes || []).join("\n"));
       setReleaseEnabled(config.enabled ?? true);
+      setReleaseStoreUrl(config.playStoreUrl || DEFAULT_UPDATE_CONFIG.playStoreUrl);
+      setReleaseNotifyUsers(config.notifyUsers ?? true);
       setShowReleaseModal(true);
     } catch (error) {
       console.error("Failed to load release config:", error);
@@ -115,19 +119,24 @@ export default function AdminScreen() {
     setIsSavingRelease(true);
     try {
       const notes = releaseNotesText.split("\n").map((n) => n.trim()).filter(Boolean);
+      const storeUrl = releaseStoreUrl.trim() || DEFAULT_UPDATE_CONFIG.playStoreUrl;
       const updatedConfig: AppUpdateConfig = {
         latestVersion: releaseLatestVersion.trim(),
         minVersion: releaseMinVersion.trim(),
         releaseNotes: notes.length > 0 ? notes : ["New features and performance improvements"],
-        playStoreUrl: "https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes",
-        appStoreUrl: "https://play.google.com/store/apps/details?id=com.huzaifa.salahtimes",
+        playStoreUrl: storeUrl,
+        appStoreUrl: storeUrl,
         enabled: releaseEnabled,
+        notifyUsers: releaseNotifyUsers,
+        notificationTitle: `Update Available: v${releaseLatestVersion.trim()}`,
+        notificationBody: `A new version of Salah Times is available. Tap to update now!`,
+        updatedAt: Date.now(),
       };
       await saveAppUpdateConfig(updatedConfig);
       setShowReleaseModal(false);
       showCustomAlert(
         "🚀 Release Published!",
-        `App Update v${updatedConfig.latestVersion} has been saved. All users will now receive the update prompt.`
+        `App Update v${updatedConfig.latestVersion} has been saved. Active users will be notified immediately.`
       );
     } catch (error) {
       console.error("Failed to publish release:", error);
@@ -635,6 +644,23 @@ export default function AdminScreen() {
                 </View>
                 <Text style={styles.actionTitle}>Masjid Requests</Text>
                 <Text style={styles.actionDesc}>User submissions</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/manage-news");
+                }}
+              >
+                <View style={[styles.actionIconWrap, { backgroundColor: "rgba(13, 115, 119, 0.08)" }]}>
+                  <Ionicons name="newspaper-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionTitle}>Manage News</Text>
+                <Text style={styles.actionDesc}>Publish & edit articles</Text>
               </Pressable>
             </View>
 
@@ -1214,6 +1240,17 @@ export default function AdminScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.primary + "15", padding: 12, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: Colors.primary + "35" }}>
+                <Ionicons name="information-circle" size={22} color={Colors.primary} style={{ marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: "Poppins-SemiBold", fontSize: 13, color: Colors.primary }}>
+                    Installed Build: v{CURRENT_VERSION}
+                  </Text>
+                  <Text style={{ fontFamily: "Poppins-Regular", fontSize: 11, color: Colors.textMuted }}>
+                    Set Latest Version higher than this to trigger updates on user devices.
+                  </Text>
+                </View>
+              </View>
               <View style={styles.locFormCard}>
                 <Text style={styles.locFormTitle}>Latest Version Name</Text>
                 <TextInput
@@ -1242,6 +1279,21 @@ export default function AdminScreen() {
               </View>
 
               <View style={styles.locFormCard}>
+                <Text style={styles.locFormTitle}>Play Store / App Download URL</Text>
+                <TextInput
+                  style={styles.locInput}
+                  placeholder="https://play.google.com/store/apps/details?id=..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={releaseStoreUrl}
+                  onChangeText={setReleaseStoreUrl}
+                  autoCapitalize="none"
+                />
+                <Text style={[styles.modalSubtitle, { marginTop: 4, marginBottom: 16 }]}>
+                  Link opened when the user taps "Update Now".
+                </Text>
+              </View>
+
+              <View style={styles.locFormCard}>
                 <Text style={styles.locFormTitle}>Release Notes (1 feature per line)</Text>
                 <TextInput
                   style={[styles.locInput, { height: 90, paddingTop: 10 }]}
@@ -1262,6 +1314,18 @@ export default function AdminScreen() {
                 <Switch
                   value={releaseEnabled}
                   onValueChange={setReleaseEnabled}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                />
+              </View>
+
+              <View style={[styles.locFormCard, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.locFormTitle}>Push / Status Bar Notification</Text>
+                  <Text style={styles.modalSubtitle}>Notify active user devices immediately</Text>
+                </View>
+                <Switch
+                  value={releaseNotifyUsers}
+                  onValueChange={setReleaseNotifyUsers}
                   trackColor={{ false: Colors.border, true: Colors.primary }}
                 />
               </View>
@@ -2063,11 +2127,6 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 5,
     gap: 6,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
   subDivisionChipText: {
     fontFamily: "Poppins_600SemiBold",
@@ -2243,11 +2302,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
   },
   resetModalHeaderRow: {
     flexDirection: "row",

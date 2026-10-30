@@ -1,315 +1,302 @@
-import { QuranSkeleton } from '@/components/Skeleton';
-// import { PremiumBannerAd } from '@/components/ads/PremiumBannerAd';
-import SurahCard from '@/components/quran/SurahCard';
-import { VoiceSearchButton } from '@/components/voice-search-button';
-import Colors from '@/constants/colors';
-import { fuzzyMatch } from '@/lib/fuzzy-search';
-import { useLanguage } from '@/lib/language-context';
-import { fetchSurahList, isQuranSynced, Surah, syncFullQuran } from '@/lib/quran/api';
-import { PARAH_LIST, ParahMapping, SURA_START_PAGES } from '@/lib/quran/constants';
-import { useQuran } from '@/lib/quran/context';
-import { router } from 'expo-router';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  ArrowLeft,
-  Bookmark,
-  BookOpen,
-  Check,
-  Heart,
-  Pin,
-  Play,
-  Search,
-  User,
-  X
-} from 'lucide-react-native';
-import Svg, { Path } from 'react-native-svg';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  StatusBar,
-  StyleSheet,
+  View,
   Text,
-  TextInput,
+  StyleSheet,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  FlatList,
+  TextInput,
+  Platform,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Svg, { Circle, Rect, Path, G } from "react-native-svg";
+import Colors from "@/constants/colors";
+import { fetchSurahList, Surah } from "@/lib/quran/api";
+import { PARAH_LIST, ParahMapping, SURA_START_PAGES } from "@/lib/quran/constants";
+import { useQuran } from "@/lib/quran/context";
+import { QuranSkeleton } from "@/components/Skeleton";
 
-export default function QuranHomeScreen() {
+export default function QuranScreen() {
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
   const [surahs, setSurahs] = useState<Surah[]>([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'surahs' | 'parah'>('surahs');
-  const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"Surah" | "Parah" | "Bookmarks">("Surah");
+  const [viewMode, setViewMode] = useState<"Arabic" | "Translation">("Arabic");
+
   const { recentRead, lastReadPage } = useQuran();
 
   useEffect(() => {
-    loadSurahs();
-    checkSyncStatus();
+    async function load() {
+      try {
+        const list = await fetchSurahList();
+        setSurahs(list);
+      } catch (e) {
+        console.error("Error loading surahs:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void load();
   }, []);
 
-  const checkSyncStatus = async () => {
-    try {
-      const synced = await isQuranSynced();
-      if (!synced) {
-        setSyncing(true);
-        await syncFullQuran('en.sahih', (progress) => {
-          setSyncProgress(progress);
-        });
-        setSyncing(false);
-      }
-    } catch (e) {
-      console.warn("Failed to check or sync Quran offline:", e);
-      setSyncing(false);
-    }
-  };
-
-  const loadSurahs = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchSurahList();
-      setSurahs(data);
-    } catch (error) {
-      console.error('Failed to load surahs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const filteredSurahs = useMemo(() => {
-    if (!search) return surahs;
-    return surahs.filter(s => {
-      const combined = `${s.englishName} ${s.name} ${s.englishNameTranslation} ${s.number}`;
-      return fuzzyMatch(combined, search);
-    });
+    if (!search.trim()) return surahs;
+    const q = search.toLowerCase();
+    return surahs.filter(
+      (s) =>
+        s.englishName.toLowerCase().includes(q) ||
+        s.name.includes(q) ||
+        String(s.number).includes(q)
+    );
   }, [surahs, search]);
 
   const filteredParahs = useMemo(() => {
-    if (!search) return PARAH_LIST;
-    return PARAH_LIST.filter(p => {
-      const combined = `${p.englishName} ${p.arabicName} parah ${p.number}`;
-      return fuzzyMatch(combined, search);
-    });
+    if (!search.trim()) return PARAH_LIST;
+    const q = search.toLowerCase();
+    return PARAH_LIST.filter(
+      (j) =>
+        j.englishName.toLowerCase().includes(q) ||
+        String(j.number).includes(q)
+    );
   }, [search]);
 
-  const handleSuraPress = useCallback((surahNumber: number) => {
-    const surahInfo = SURA_START_PAGES.find(s => s.number === surahNumber);
-    const startPage = surahInfo ? surahInfo.startPage : 1;
-    router.push(`/quran/mushaf?page=${startPage}`);
-  }, []);
+  const handleSurahPress = (surahNumber: number) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const sInfo = SURA_START_PAGES.find((s) => s.number === surahNumber);
+    const page = sInfo ? sInfo.startPage : 1;
+    router.push(`/quran/mushaf?page=${page}`);
+  };
 
-  const renderJuzItem = useCallback(({ item }: { item: ParahMapping }) => {
+  const handleResume = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const page = lastReadPage || 2;
+    router.push(`/quran/mushaf?page=${page}`);
+  };
+
+  const renderSurahRow = ({ item }: { item: Surah }) => {
+    const isMeccan = item.revelationType === "Meccan" || item.number % 2 !== 0;
+
     return (
       <TouchableOpacity
-        style={styles.parahCardContainer}
-        onPress={() => router.push(`/quran/mushaf?page=${item.startPage}`)}
-        activeOpacity={0.75}
+        style={styles.surahRow}
+        activeOpacity={0.7}
+        onPress={() => handleSurahPress(item.number)}
       >
-        {/* Left 8-pointed scalloped star badge */}
-        <View style={styles.numberBadgeWrap}>
-          <Svg width={40} height={40} viewBox="0 0 36 40">
-            <Path
-              d="M18 2 L22 6 L27 4 L28 9 L33 11 L31 16 L35 20 L31 24 L33 29 L28 31 L27 36 L22 34 L18 38 L14 34 L9 36 L8 31 L3 29 L5 24 L1 20 L5 16 L3 11 L8 9 L9 4 L14 6 Z"
-              fill="none"
-              stroke={Colors.primary}
-              strokeWidth="1.5"
-            />
-          </Svg>
+        <View style={styles.numberCircle}>
           <Text style={styles.numberText}>{item.number}</Text>
         </View>
 
-        {/* Middle Parah Info */}
-        <View style={styles.infoContainer}>
-          <Text style={styles.englishName} numberOfLines={1}>
-            Parah {item.number} ({item.englishName})
-          </Text>
-          <Text style={styles.subInfo} numberOfLines={1}>
-            Start Page {item.startPage} • {item.surahStart}
-          </Text>
+        <View style={styles.surahInfoCol}>
+          <Text style={styles.surahName}>{item.englishName}</Text>
+          <Text style={styles.arabicSmall}>{item.name}</Text>
         </View>
 
-        {/* Right Arabic Name & Play Circle */}
-        <View style={styles.rightContainer}>
-          <Text style={styles.arabicName}>{item.arabicName}</Text>
-          <View style={styles.playButton}>
-            <Play size={14} color={Colors.primary} fill={Colors.primary} />
-          </View>
-        </View>
+        <Text style={styles.ayatCount}>{item.numberOfAyahs} Ayat</Text>
+        <Text style={styles.revelationType}>{isMeccan ? "Meccan" : "Madinan"}</Text>
       </TouchableOpacity>
     );
-  }, []);
+  };
 
-  const renderItem = useCallback(({ item }: { item: Surah | ParahMapping }) => {
-    if (activeTab === 'surahs') {
-      const surah = item as Surah;
-      return (
-        <SurahCard
-          surah={surah}
-          onPress={() => handleSuraPress(surah.number)}
-          isRecent={recentRead?.surahNumber === surah.number}
-        />
-      );
-    }
-    return renderJuzItem({ item: item as ParahMapping });
-  }, [activeTab, handleSuraPress, recentRead, renderJuzItem]);
-
-  const listData = activeTab === 'surahs' ? filteredSurahs : filteredParahs;
-
-  const renderHeader = () => (
-    <View>
-      {/* Quick Action Pill Banner */}
-      <View style={styles.quickActionPillContainer}>
-        <TouchableOpacity
-          style={styles.quickActionItem}
-          onPress={() => {
-            if (lastReadPage) router.push(`/quran/mushaf?page=${lastReadPage}`);
-          }}
-        >
-          <View style={styles.quickActionIconCircle}>
-            <BookOpen size={18} color="#FFFFFF" />
-          </View>
-          <Text style={styles.quickActionLabel}>Last Read</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickActionItem}>
-          <View style={styles.quickActionIconCircle}>
-            <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
-          </View>
-          <Text style={styles.quickActionLabel}>Last Listened</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickActionItem}>
-          <View style={styles.quickActionIconCircle}>
-            <Pin size={18} color="#FFFFFF" />
-          </View>
-          <Text style={styles.quickActionLabel}>Pinned</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickActionItem}>
-          <View style={styles.quickActionIconCircle}>
-            <Heart size={18} color="#FFFFFF" />
-          </View>
-          <Text style={styles.quickActionLabel}>Favorites</Text>
-        </TouchableOpacity>
+  const renderParahRow = ({ item }: { item: ParahMapping }) => (
+    <TouchableOpacity
+      style={styles.surahRow}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/quran/mushaf?page=${item.startPage}`)}
+    >
+      <View style={styles.numberCircle}>
+        <Text style={styles.numberText}>{item.number}</Text>
       </View>
 
-      {/* Tab Switcher: Surah vs Juz */}
-      <View style={styles.tabBarRow}>
-        <View style={styles.segmentedControl}>
-          <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'surahs' && styles.segmentBtnActive]}
-            onPress={() => {
-              setActiveTab('surahs');
-              setSearch('');
-            }}
-            activeOpacity={0.8}
-          >
-            {activeTab === 'surahs' && <Check size={16} color={Colors.primary} style={{ marginRight: 4 }} />}
-            <Text style={[styles.segmentText, activeTab === 'surahs' && styles.segmentTextActive]}>
-              Surah
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'parah' && styles.segmentBtnActive]}
-            onPress={() => {
-              setActiveTab('parah');
-              setSearch('');
-            }}
-            activeOpacity={0.8}
-          >
-            {activeTab === 'parah' && <Check size={16} color={Colors.primary} style={{ marginRight: 4 }} />}
-            <Text style={[styles.segmentText, activeTab === 'parah' && styles.segmentTextActive]}>
-              Parah
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.searchTriggerBtn}
-          onPress={() => setShowSearchInput(!showSearchInput)}
-        >
-          <Search size={20} color={Colors.primary} />
-        </TouchableOpacity>
+      <View style={styles.surahInfoCol}>
+        <Text style={styles.surahName}>Parah {item.number}</Text>
+        <Text style={styles.arabicSmall}>{item.englishName}</Text>
       </View>
 
-      {/* Expandable Search Input */}
-      {showSearchInput && (
-        <View style={styles.searchInputContainer}>
-          <Search size={18} color={Colors.textMuted} style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search surah or parah..."
-            value={search}
-            onChangeText={setSearch}
-            placeholderTextColor={Colors.textMuted}
-            autoFocus
-          />
-          {search ? (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <X size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          ) : (
-            <VoiceSearchButton onTranscript={setSearch} size={18} color={Colors.textMuted} />
-          )}
-        </View>
-      )}
-
-      {syncing && (
-        <View style={styles.syncBanner}>
-          <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-          <Text style={styles.syncText}>
-            Downloading Quran for offline reading... {Math.round(syncProgress * 100)}%
-          </Text>
-        </View>
-      )}
-    </View>
+      <Text style={styles.ayatCount}>Page {item.startPage}</Text>
+      <Text style={styles.revelationType}>{item.surahStart.split(" ")[0]}</Text>
+    </TouchableOpacity>
   );
 
   return (
-    <View style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor={Colors.background} />
 
-      {/* Top Navigation Bar */}
-      <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <ArrowLeft size={22} color={Colors.text} />
+      {/* Top Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Quran</Text>
-        <View style={styles.headerRightGroup}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Bookmark size={20} color={Colors.text} />
+        <View style={{ width: 36 }} />
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchBarWrap}>
+        <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+        <TextInput
+          placeholder="Search Surah or Ayah..."
+          placeholderTextColor="#94A3B8"
+          value={search}
+          onChangeText={setSearch}
+          style={styles.searchInput}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={18} color="#94A3B8" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
-            <User size={20} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
+        )}
       </View>
 
       {loading ? (
         <QuranSkeleton />
       ) : (
         <FlatList
-          data={listData as any[]}
-          keyExtractor={(item) => (activeTab === 'surahs' ? `surah_${(item as Surah).number}` : `juz_${(item as ParahMapping).number}`)}
-          renderItem={renderItem}
-          ListHeaderComponent={renderHeader}
-          initialNumToRender={10}
-          maxToRenderPerBatch={8}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS === 'android'}
-          contentContainerStyle={styles.scrollContent}
+          data={(activeTab === "Surah" ? filteredSurahs : filteredParahs) as any[]}
+          keyExtractor={(item) => (activeTab === "Surah" ? `surah_${(item as Surah).number}` : `parah_${(item as ParahMapping).number}`)}
+          renderItem={activeTab === "Surah" ? (renderSurahRow as any) : (renderParahRow as any)}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 16) + 100 }]}
+          ListHeaderComponent={
+            <View>
+              {/* Continue Reading Hero Card */}
+              <View style={styles.continueCard}>
+                {/* Circular Progress Ring */}
+                <View style={styles.progressRingWrap}>
+                  <Svg width={64} height={64} viewBox="0 0 64 64">
+                    <Circle
+                      cx="32"
+                      cy="32"
+                      r="26"
+                      stroke="#E2EBE5"
+                      strokeWidth="5"
+                      fill="none"
+                    />
+                    <Circle
+                      cx="32"
+                      cy="32"
+                      r="26"
+                      stroke={Colors.primary}
+                      strokeWidth="5"
+                      strokeDasharray="105 165"
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </Svg>
+                  <View style={styles.progressRingTextWrap}>
+                    <Text style={styles.progressPercentText}>65%</Text>
+                  </View>
+                </View>
+
+                {/* Middle Info */}
+                <View style={styles.continueCenterInfo}>
+                  <Text style={styles.continueLabel}>Continue Reading</Text>
+                  <Text style={styles.continueSurahName}>Surah Al Baqarah</Text>
+                  <Text style={styles.continueMeta}>Ayah 187 • Parah 2</Text>
+
+                  <TouchableOpacity style={styles.resumeBtn} onPress={handleResume}>
+                    <Text style={styles.resumeBtnText}>Resume</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Right 3D Book Graphic */}
+                <View style={styles.bookGraphicWrap}>
+                  <Svg width={64} height={56} viewBox="0 0 64 56">
+                    <Rect x="4" y="8" width="56" height="42" rx="4" fill="#D4AF37" />
+                    <Rect x="6" y="10" width="52" height="38" rx="3" fill={Colors.primary} />
+                    <Path d="M 32 10 L 32 48" stroke="#D4AF37" strokeWidth="2" />
+                    <Circle cx="32" cy="28" r="6" stroke="#D4AF37" strokeWidth="1.5" fill="none" />
+                  </Svg>
+                </View>
+              </View>
+
+              {/* Segmented Sub-Tabs: Surah, Parah, Bookmarks */}
+              <View style={styles.subTabsRow}>
+                {(["Surah", "Parah", "Bookmarks"] as const).map((tab) => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[
+                      styles.subTabPill,
+                      activeTab === tab && styles.subTabPillActive,
+                    ]}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      if (tab === "Bookmarks") {
+                        router.push("/quran/bookmarks");
+                      } else {
+                        setActiveTab(tab);
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.subTabText,
+                        activeTab === tab && styles.subTabTextActive,
+                      ]}
+                    >
+                      {tab}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          }
         />
       )}
 
-      {/* <PremiumBannerAd inTabBar={true} /> */}
-    </View>
+      {/* Bottom Floating Pill Switcher: [ Arabic ] | [ Translation ] */}
+      <View style={styles.bottomSwitcherWrap}>
+        <View style={styles.floatingSwitcherPill}>
+          <TouchableOpacity
+            style={[
+              styles.switchOption,
+              viewMode === "Arabic" && styles.switchOptionActive,
+            ]}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setViewMode("Arabic");
+            }}
+          >
+            <Text
+              style={[
+                styles.switchText,
+                viewMode === "Arabic" && styles.switchTextActive,
+              ]}
+            >
+              Arabic
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.switchOption,
+              viewMode === "Translation" && styles.switchOptionActive,
+            ]}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setViewMode("Translation");
+            }}
+          >
+            <Text
+              style={[
+                styles.switchText,
+                viewMode === "Translation" && styles.switchTextActive,
+              ]}
+            >
+              Translation
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -318,198 +305,208 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: Colors.background,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    height: 48,
   },
-  headerTitle: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 20,
-    color: Colors.text,
-  },
-  headerRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  iconBtn: {
+  backBtn: {
     padding: 6,
   },
-  scrollContent: {
+  headerTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: "#1A2E1A",
+  },
+  searchBarWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    marginHorizontal: 20,
+    marginVertical: 10,
     paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  quickActionPillContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    marginVertical: 12,
-  },
-  quickActionItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  quickActionIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickActionLabel: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
-    color: Colors.primary,
-  },
-  tabBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 12,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: 3,
-    flex: 1,
-    marginRight: 12,
+    height: 46,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  segmentBtnActive: {
-    backgroundColor: Colors.overlay,
-  },
-  segmentText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  segmentTextActive: {
-    fontFamily: 'Poppins_600SemiBold',
-    color: Colors.primary,
-  },
-  searchTriggerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: "#E2EBE5",
   },
   searchInput: {
     flex: 1,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: "Poppins_400Regular",
     fontSize: 14,
-    color: Colors.text,
+    color: "#1A2E1A",
   },
-  syncBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 12,
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 90,
   },
-  syncText: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  parahCardContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    marginBottom: 10,
+  continueCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: "#EAEFE8",
+    marginBottom: 16,
   },
-  numberBadgeWrap: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
+  progressRingWrap: {
+    width: 64,
+    height: 64,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    marginRight: 12,
   },
-  numberText: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 12,
+  progressRingTextWrap: {
+    position: "absolute",
+  },
+  progressPercentText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 13,
     color: Colors.primary,
-    includeFontPadding: false,
   },
-  infoContainer: {
+  continueCenterInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
-  englishName: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-    color: Colors.text,
-  },
-  subInfo: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
+  continueLabel: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
     color: Colors.textSecondary,
-    marginTop: 2,
   },
-  rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginLeft: 8,
+  continueSurahName: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14.5,
+    color: "#1A2E1A",
+    marginTop: -1,
   },
-  arabicName: {
-    fontFamily: 'Amiri_700Bold',
-    fontSize: 18,
-    color: Colors.primary,
+  continueMeta: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11.5,
+    color: "#5C6B5C",
+    marginBottom: 8,
   },
-  playButton: {
+  resumeBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    alignSelf: "flex-start",
+  },
+  resumeBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: "#FFFFFF",
+  },
+  bookGraphicWrap: {
+    marginLeft: 6,
+  },
+  subTabsRow: {
+    flexDirection: "row",
+    backgroundColor: "#F0F4EC",
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 14,
+  },
+  subTabPill: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+  },
+  subTabPillActive: {
+    backgroundColor: Colors.primary,
+  },
+  subTabText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  subTabTextActive: {
+    color: "#FFFFFF",
+    fontFamily: "Poppins_600SemiBold",
+  },
+  surahRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF3EC",
+  },
+  numberCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 2,
+    backgroundColor: "#EAF4F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  numberText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: Colors.primary,
+  },
+  surahInfoCol: {
+    flex: 1,
+  },
+  surahName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14.5,
+    color: "#1A2E1A",
+  },
+  arabicSmall: {
+    fontFamily: "Amiri_700Bold",
+    fontSize: 14,
+    color: Colors.primary,
+    marginTop: -2,
+  },
+  ayatCount: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12.5,
+    color: Colors.textSecondary,
+    marginRight: 16,
+  },
+  revelationType: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: "#8A998A",
+    width: 58,
+    textAlign: "right",
+  },
+  bottomSwitcherWrap: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 20 : 16,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  floatingSwitcherPill: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "#E2EDE6",
+  },
+  switchOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+  },
+  switchOptionActive: {
+    backgroundColor: Colors.primary,
+  },
+  switchText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13.5,
+    color: Colors.textSecondary,
+  },
+  switchTextActive: {
+    color: "#FFFFFF",
+    fontFamily: "Poppins_600SemiBold",
   },
 });

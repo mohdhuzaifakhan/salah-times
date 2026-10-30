@@ -17,9 +17,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocation } from "@/lib/location-context";
 
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets();
   const { admin, register } = useAuth();
   const { locations } = useLocation();
   const params = useLocalSearchParams<{
@@ -287,6 +289,8 @@ export default function RegisterScreen() {
             <Text style={styles.registerBtnText}>Register Masjid</Text>
           )}
         </Pressable>
+
+        <View style={{ height: Math.max(insets.bottom, 24) + 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

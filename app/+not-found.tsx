@@ -25,15 +25,17 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
+    fontFamily: "Poppins_700Bold",
     fontSize: 20,
-    fontWeight: "bold",
+    color: "#1A2E1A",
   },
   link: {
     marginTop: 15,
     paddingVertical: 15,
   },
   linkText: {
+    fontFamily: "Poppins_500Medium",
     fontSize: 14,
-    color: "#2e78b7",
+    color: "#0D7377",
   },
 });

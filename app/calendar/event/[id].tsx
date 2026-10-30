@@ -1,28 +1,28 @@
-import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  StatusBar, 
-  TouchableOpacity,
-  ScrollView,
-  Platform
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { ISLAMIC_EVENTS } from '@/lib/calendar/api';
 import { useCalendar } from '@/lib/calendar/context';
 import { saveIslamicEvent, unsaveIslamicEvent } from '@/lib/calendar/db';
 import { useLanguage } from '@/lib/language-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React from 'react';
+import {
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const { upcomingEvents, savedEvents, refreshSavedEvents, scheduleEventReminder } = useCalendar();
   const { t } = useLanguage();
-  
+
   const event = upcomingEvents.find(e => e.id === id) || ISLAMIC_EVENTS.find(e => e.id === id);
   const isSaved = savedEvents.some(s => s.eventId === id);
 
@@ -52,21 +52,21 @@ export default function EventDetailScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('islamic_calendar')}</Text>
         <TouchableOpacity onPress={handleToggleSave} style={styles.backButton}>
-          <Ionicons 
-            name={isSaved ? "bookmark" : "bookmark-outline"} 
-            size={24} 
-            color={isSaved ? Colors.accent : Colors.text} 
+          <Ionicons
+            name={isSaved ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color={isSaved ? Colors.accent : Colors.text}
           />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} style={styles.scrollView}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) + 60 }]} style={styles.scrollView}>
         <View style={styles.iconContainer}>
           <Ionicons name={event.icon as any} size={64} color={Colors.primary} />
         </View>
-        
+
         <Text style={styles.title}>{event.title}</Text>
-        
+
         <View style={styles.dateContainer}>
           <View style={styles.dateBox}>
             <Text style={styles.dateLabel}>Hijri Date</Text>
@@ -88,14 +88,14 @@ export default function EventDetailScreen() {
           <Text style={styles.descriptionText}>{event.description}</Text>
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.remindButton, isSaved && styles.remindButtonActive]}
           onPress={handleToggleSave}
         >
-          <Ionicons 
-            name={isSaved ? "notifications" : "notifications-outline"} 
-            size={20} 
-            color="#fff" 
+          <Ionicons
+            name={isSaved ? "notifications" : "notifications-outline"}
+            size={20}
+            color="#fff"
           />
           <Text style={styles.remindButtonText}>
             {isSaved ? "Reminder Set" : "Notify Me"}

@@ -1,69 +1,102 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { fetchAppUpdateConfig, compareVersions, CURRENT_VERSION, AppUpdateConfig } from "@/lib/updates";
+import * as Notifications from "expo-notifications";
+import {
+  fetchAppUpdateConfig,
+  subscribeToAppUpdate,
+  compareVersions,
+  CURRENT_VERSION,
+  AppUpdateConfig,
+  notifyUserOfUpdate,
+  SKIPPED_VERSION_KEY,
+} from "@/lib/updates";
 import AppUpdateModal from "./AppUpdateModal";
-
-const SKIPPED_VERSION_KEY = "skipped_update_version";
 
 export default function AppUpdateChecker() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isForced, setIsForced] = useState(false);
   const [updateConfig, setUpdateConfig] = useState<AppUpdateConfig | null>(null);
 
-  const checkForUpdates = useCallback(async () => {
+  // Process a fresh update config (from initial load, onSnapshot, or app resume)
+  const processUpdateConfig = useCallback(async (config: AppUpdateConfig) => {
     try {
-      const config = await fetchAppUpdateConfig();
-
-      if (!config.enabled) {
+      if (!config || !config.enabled) {
+        setModalVisible(false);
         return;
       }
 
-      // Compare current version with min required version
+      setUpdateConfig(config);
+
+      // 1. Compare current version with min required version -> FORCED UPDATE
       const forcedCompare = compareVersions(CURRENT_VERSION, config.minVersion);
       if (forcedCompare < 0) {
-        // Current version is less than min support version -> FORCE UPDATE
-        setUpdateConfig(config);
         setIsForced(true);
         setModalVisible(true);
+        if (config.notifyUsers !== false) {
+          void notifyUserOfUpdate(config);
+        }
         return;
       }
 
-      // Compare current version with latest version
+      // 2. Compare current version with latest release version -> OPTIONAL UPDATE
       const optionalCompare = compareVersions(CURRENT_VERSION, config.latestVersion);
       if (optionalCompare < 0) {
-        // Current version is less than latest version -> OPTIONAL UPDATE
-        // Check if user has previously skipped this specific version
+        setIsForced(false);
+
+        // Check if user has previously dismissed/skipped this exact version
         const skippedVersion = await AsyncStorage.getItem(SKIPPED_VERSION_KEY);
         if (skippedVersion !== config.latestVersion) {
-          setUpdateConfig(config);
-          setIsForced(false);
           setModalVisible(true);
         }
+
+        // Notify user via status bar push notification if enabled
+        if (config.notifyUsers !== false) {
+          void notifyUserOfUpdate(config);
+        }
+      } else {
+        // App is up to date or ahead of release
+        setModalVisible(false);
       }
     } catch (err) {
-      console.error("[Updates] Auto update check failed:", err);
+      console.error("[Updates] Error processing update config:", err);
     }
   }, []);
 
   useEffect(() => {
-    void checkForUpdates();
+    // 1. Real-time Firestore subscription (immediate notification when Admin updates release in Firestore)
+    const unsubscribeSnapshot = subscribeToAppUpdate((config) => {
+      void processUpdateConfig(config);
+    });
 
-    const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+    // 2. Fetch directly from server when app returns to foreground
+    const subscriptionAppState = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
-        void checkForUpdates();
+        void fetchAppUpdateConfig(true).then((cfg) => {
+          void processUpdateConfig(cfg);
+        });
+      }
+    });
+
+    // 3. User taps on update push notification
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.type === "app_update") {
+        setModalVisible(true);
       }
     });
 
     return () => {
-      subscription.remove();
+      unsubscribeSnapshot();
+      subscriptionAppState.remove();
+      responseListener.remove();
     };
-  }, [checkForUpdates]);
+  }, [processUpdateConfig]);
 
   const handleCloseModal = async () => {
     if (updateConfig && !isForced) {
       try {
-        // Remember that user skipped this specific version
+        // Save that user tapped 'Later' for this version
         await AsyncStorage.setItem(SKIPPED_VERSION_KEY, updateConfig.latestVersion);
       } catch (err) {
         console.error("[Updates] Failed to save skipped version to AsyncStorage:", err);
@@ -75,7 +108,6 @@ export default function AppUpdateChecker() {
   const handleUpdatePress = async () => {
     if (updateConfig && !isForced) {
       try {
-        // Remember that user acknowledged update for this version so optional modal doesn't reappear immediately
         await AsyncStorage.setItem(SKIPPED_VERSION_KEY, updateConfig.latestVersion);
       } catch (err) {
         console.error("[Updates] Failed to save update version to AsyncStorage:", err);

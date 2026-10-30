@@ -300,7 +300,7 @@ export default function EditMasjidDetailsScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 60 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

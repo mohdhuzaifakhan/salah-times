@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, useColorScheme, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
@@ -11,38 +12,36 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Home</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="prayer">
         <Icon sf={{ default: "timer", selected: "timer" }} />
-        <Label>Prayer Times</Label>
+        <Label>Prayer</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="quran">
-        <Icon sf={{ default: "book", selected: "book.fill" }} />
-        <Label>Quran</Label>
-      </NativeTabs.Trigger>
-      {/* <NativeTabs.Trigger name="hadith">
-        <Icon sf={{ default: "books.vertical", selected: "books.vertical.fill" }} />
-        <Label>Hadith</Label>
-      </NativeTabs.Trigger> */}
-      <NativeTabs.Trigger name="calendar">
-        <Icon sf={{ default: "calendar", selected: "calendar" }} />
-        <Label>Calendar</Label>
+      <NativeTabs.Trigger name="news">
+        <Icon sf={{ default: "newspaper", selected: "newspaper.fill" }} />
+        <Label>News</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="admin">
         <Icon sf={{ default: "person.badge.key", selected: "person.badge.key.fill" }} />
-        <Label>Admin</Label>
+        <Label>My Masjid</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
-        <Label>Settings</Label>
+        <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
 function ClassicTabLayout() {
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isWeb = Platform.OS === "web";
   const isIOS = Platform.OS === "ios";
+  const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 14 : 0);
 
   return (
     <Tabs
@@ -55,12 +54,14 @@ function ClassicTabLayout() {
           fontSize: 11,
         },
         tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : isDark ? "#000" : "#fff",
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: Colors.border,
+          backgroundColor: isIOS ? "transparent" : isDark ? "#121212" : "#FFFFFF",
+          borderTopWidth: isIOS ? 0 : 1,
+          borderTopColor: isDark ? "#222222" : "#EAEFE8",
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          height: isWeb ? 84 : isIOS ? (insets.bottom > 0 ? 84 : 64) : 62 + bottomInset,
+          paddingBottom: Math.max(bottomInset, 8),
+          paddingTop: 6,
+          ...(isIOS ? { position: "absolute" } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -82,37 +83,27 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Prayer Times",
+          title: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="prayer"
+        options={{
+          title: "Prayer",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="time-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="quran"
+        name="news"
         options={{
-          title: "Quran",
+          title: "News",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="hadith"
-        options={{
-          href: null,
-          title: "Hadith",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: "Calendar",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons name="newspaper-outline" size={size} color={color} />
           ),
         }}
       />
@@ -128,10 +119,31 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: "More",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="grid-outline" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="quran"
+        options={{
+          href: null,
+          title: "Quran",
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          href: null,
+          title: "Calendar",
+        }}
+      />
+      <Tabs.Screen
+        name="hadith"
+        options={{
+          href: null,
+          title: "Hadith",
         }}
       />
     </Tabs>

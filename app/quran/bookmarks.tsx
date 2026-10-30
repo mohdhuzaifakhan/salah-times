@@ -95,7 +95,7 @@ export default function BookmarksScreen() {
               <Text style={styles.translationText} numberOfLines={2}>{item.translation}</Text>
             </TouchableOpacity>
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
         />
       )}
     </View>

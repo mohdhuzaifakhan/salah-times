@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { BOOKS, HadithBook, getDailyHadith } from '@/lib/hadith/api';
 import HadithBookCard from '@/components/hadith/HadithBookCard';
@@ -69,6 +69,7 @@ const HadithHeader = React.memo(({ search, setSearch, dailyHadith, recentRead, t
 HadithHeader.displayName = 'HadithHeader';
 
 export default function HadithHomeScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [dailyHadith, setDailyHadith] = useState<any>(null);
@@ -139,7 +140,7 @@ export default function HadithHomeScreen() {
           }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={<View style={{ height: 140 }} />}
+          ListFooterComponent={<View style={{ height: Math.max(insets.bottom, 16) + 100 }} />}
         />
       </View>
       {/* <PremiumBannerAd inTabBar={true} /> */}

@@ -239,7 +239,7 @@ export const PrayerAlarmSettingsModal: React.FC<Props> = ({
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 24 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 60 }}
           showsVerticalScrollIndicator={false}
         >
           {/* Master Controls Card */}

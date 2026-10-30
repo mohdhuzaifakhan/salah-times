@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { showCustomAlert } from "@/lib/custom-alert";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -20,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import { QRScannerModal } from "@/components/QRScannerModal";
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -128,7 +130,10 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.loginBtnText}>Login</Text>
+            <View style={styles.loginBtnContent}>
+              <Ionicons name="log-in-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.loginBtnText}>Login as Admin</Text>
+            </View>
           )}
         </Pressable>
 
@@ -156,6 +161,8 @@ export default function LoginScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.accent} />
         </TouchableOpacity>
+
+        <View style={{ height: Math.max(insets.bottom, 24) + 40 }} />
       </ScrollView>
 
       <QRScannerModal
@@ -248,6 +255,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 8,
     width: "100%",
+  },
+  loginBtnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   loginBtnText: {
     fontFamily: "Poppins_600SemiBold",

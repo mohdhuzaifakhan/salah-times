@@ -139,7 +139,7 @@ export default function AdminNotificationsScreen() {
         <FlatList
           data={notifications}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 24) + 50 }]}
           renderItem={({ item }) => (
             <Pressable
               style={[styles.card, !item.read && styles.unreadCard]}

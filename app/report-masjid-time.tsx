@@ -18,14 +18,25 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { createMasjidMessage, createAdminNotification } from "@/lib/store";
-import { PRAYER_NAMES, PRAYER_ORDER } from "@/lib/types";
+import { PRAYER_NAMES, PRAYER_ORDER, RAMADAN_TIMES_ORDER, OTHER_TIMES_ORDER, Timetable } from "@/lib/types";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/lib/auth-context";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
+
+const ALL_REPORT_KEYS: (keyof Timetable)[] = [
+  ...PRAYER_ORDER,
+  ...RAMADAN_TIMES_ORDER,
+  ...OTHER_TIMES_ORDER,
+];
 
 export default function ReportMasjidTimeScreen() {
-  const { masjidId, masjidName } = useLocalSearchParams<{ masjidId: string; masjidName: string }>();
+  const { masjidId: paramMasjidId, masjidName: paramMasjidName } = useLocalSearchParams<{ masjidId: string; masjidName: string }>();
+  const { primaryMasjid } = usePrimaryMasjid();
   const insets = useSafeAreaInsets();
   const { admin } = useAuth();
+
+  const masjidId = paramMasjidId || primaryMasjid?.id || "";
+  const masjidName = paramMasjidName || primaryMasjid?.name || "Masjid";
 
   const [prayer, setPrayer] = useState<string>("fajr");
   const [time, setTime] = useState("");
@@ -77,7 +88,13 @@ export default function ReportMasjidTimeScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!masjidId) return;
+    if (!masjidId) {
+      showCustomAlert(
+        "No Masjid Selected",
+        "Please select your primary masjid before submitting a correction."
+      );
+      return;
+    }
 
     const hasTime = time.trim().length > 0;
     const hasPhoto = !!timetablePhoto;
@@ -148,7 +165,7 @@ export default function ReportMasjidTimeScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Platform.OS === "web" ? 34 + 20 : insets.bottom + 20 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 40 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -167,9 +184,9 @@ export default function ReportMasjidTimeScreen() {
 
         {/* Form Fields */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Which prayer time is incorrect?</Text>
+          <Text style={styles.label}>Which prayer or event time is incorrect?</Text>
           <View style={styles.prayerSelector}>
-            {PRAYER_ORDER.map((p) => (
+            {ALL_REPORT_KEYS.map((p) => (
               <Pressable
                 key={p}
                 style={[
@@ -185,7 +202,7 @@ export default function ReportMasjidTimeScreen() {
                   styles.prayerChipText,
                   prayer === p && styles.activePrayerChipText,
                 ]}>
-                  {PRAYER_NAMES[p]}
+                  {PRAYER_NAMES[p] || p}
                 </Text>
               </Pressable>
             ))}

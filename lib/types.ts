@@ -5,6 +5,16 @@ export interface Timetable {
   maghrib: string;
   isha: string;
   jummah: string;
+  // Other daily & optional times
+  sunrise?: string;
+  ishraq?: string;
+  chasht?: string;
+  zawal?: string;
+  tahajjud?: string;
+  // Ramadan specific times
+  sehri?: string;
+  iftar?: string;
+  taraweeh?: string;
 }
 
 export interface Masjid {
@@ -50,6 +60,14 @@ export const DEFAULT_TIMETABLE: Timetable = {
   maghrib: "18:30",
   isha: "20:00",
   jummah: "13:30",
+  sunrise: "06:15",
+  ishraq: "06:35",
+  chasht: "09:30",
+  zawal: "11:55",
+  tahajjud: "03:45",
+  sehri: "04:45",
+  iftar: "18:35",
+  taraweeh: "20:30",
 };
 
 export const PRAYER_NAMES: Record<keyof Timetable, string> = {
@@ -59,7 +77,29 @@ export const PRAYER_NAMES: Record<keyof Timetable, string> = {
   maghrib: "Maghrib",
   isha: "Isha",
   jummah: "Jummah",
+  sunrise: "Sunrise",
+  ishraq: "Ishraq",
+  chasht: "Chasht / Duha",
+  zawal: "Zawal (Noon)",
+  tahajjud: "Tahajjud",
+  sehri: "Sehri Ends",
+  iftar: "Iftar",
+  taraweeh: "Taraweeh",
 };
+
+export const OTHER_TIMES_ORDER: (keyof Timetable)[] = [
+  "sunrise",
+  "ishraq",
+  "chasht",
+  "zawal",
+  "tahajjud",
+];
+
+export const RAMADAN_TIMES_ORDER: (keyof Timetable)[] = [
+  "sehri",
+  "iftar",
+  "taraweeh",
+];
 
 export const PRAYER_ORDER: (keyof Timetable)[] = [
   "fajr",

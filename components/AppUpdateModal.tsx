@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { AppUpdateConfig, openPlayStore } from "@/lib/updates";
+import { AppUpdateConfig, openPlayStore, CURRENT_VERSION } from "@/lib/updates";
 import * as Haptics from "expo-haptics";
 
 interface AppUpdateModalProps {
@@ -81,7 +81,17 @@ export default function AppUpdateModal({
           <Text style={styles.title}>
             {isForced ? "Critical Update Available" : "New Version Available"}
           </Text>
-          <Text style={styles.versionBadge}>v{config.latestVersion}</Text>
+
+          {/* Version Comparison Row */}
+          <View style={styles.versionRow}>
+            <View style={styles.currentVerBadge}>
+              <Text style={styles.currentVerText}>Current: v{CURRENT_VERSION}</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={12} color={Colors.primary} style={{ marginHorizontal: 6 }} />
+            <View style={styles.newVerBadge}>
+              <Text style={styles.newVerText}>Latest: v{config.latestVersion}</Text>
+            </View>
+          </View>
 
           <Text style={styles.description}>
             {isForced
@@ -176,6 +186,35 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textAlign: "center",
   },
+  versionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  currentVerBadge: {
+    backgroundColor: "#F0F4EC",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  currentVerText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  newVerBadge: {
+    backgroundColor: "#E2F3E9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  newVerText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: Colors.primary,
+  },
   versionBadge: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 12,
@@ -223,6 +262,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   bulletPoint: {
+    fontFamily: "Poppins_600SemiBold",
     color: Colors.primary,
     fontSize: 14,
     marginRight: 6,

@@ -1,962 +1,1161 @@
-import { EventCard } from "@/components/EventCard";
-import { MasjidCard } from "@/components/MasjidCard";
-import { ExploreSkeleton } from "@/components/Skeleton";
-// import { NativeMasjidAdCard } from "@/components/ads/NativeMasjidAdCard";
-// import { PremiumBannerAd } from "@/components/ads/PremiumBannerAd";
-import { VoiceSearchButton } from "@/components/voice-search-button";
-import Colors from "@/constants/colors";
-import { showCustomAlert } from "@/lib/custom-alert";
-import { fuzzyMatch } from "@/lib/fuzzy-search";
-import { useLanguage } from "@/lib/language-context";
-import { useLocation } from "@/lib/location-context";
-import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
-import { getAllMasjids, getGlobalEvents } from "@/lib/store";
-import { AppEvent, Masjid } from "@/lib/types";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { router, useFocusEffect } from "expo-router";
-import { QueryDocumentSnapshot } from "firebase/firestore";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
   View,
-  ViewStyle,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  Platform,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Svg, { Circle, Rect, Path } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
+import moment from "moment-hijri";
 
-import { getUpcomingPrayerDetails, usePrayerCountdown } from "@/lib/prayer-timer";
+import Colors from "@/constants/colors";
+import { usePrimaryMasjid } from "@/lib/primary-masjid-context";
+import { useLocation } from "@/lib/location-context";
+import { usePrayerCountdown } from "@/lib/prayer-timer";
+import { hasCompletedOnboarding } from "@/lib/onboarding";
+import { getCompletedAmal, DEFAULT_AMAL_LIST } from "@/lib/amal";
+import { AmalTrackerModal } from "@/components/modals/AmalTrackerModal";
+import { PrayerAlarmSettingsModal } from "@/components/PrayerAlarmSettingsModal";
+import { showCustomAlert } from "@/lib/custom-alert";
+import { getAllMasjids } from "@/lib/store";
+import { fuzzyMatch } from "@/lib/fuzzy-search";
+import { VoiceSearchButton } from "@/components/voice-search-button";
+import { MasjidCard } from "@/components/MasjidCard";
+import { Masjid } from "@/lib/types";
 
-function formatTimeCompact(time: string): string {
-  if (!time) return "";
-  const [h, m] = time.split(":");
-  const hour = parseInt(h, 10);
-  const displayHour = hour % 12 || 12;
-  const ampm = hour >= 12 ? "PM" : "AM";
-  return `${displayHour}:${m} ${ampm}`;
-}
-
-function PrimaryMasjidCardView({ masjid, onPress }: { masjid: Masjid; onPress: () => void }) {
-  const countdown = usePrayerCountdown(masjid.timetable);
-
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.primaryCard,
-        pressed && styles.primaryCardPressed,
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.primaryCardHeader}>
-        <View style={styles.primaryCardIconWrap}>
-          <Ionicons name="star" size={16} color="#fff" />
-        </View>
-        <View style={styles.primaryCardInfo}>
-          <Text style={styles.primaryCardLabel}>
-            YOUR PRIMARY MASJID{masjid.subDivision ? ` • ${masjid.subDivision.toUpperCase()}` : ""}
-          </Text>
-          <Text style={styles.primaryCardName} numberOfLines={1}>
-            {masjid.name}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-      </View>
-
-      {countdown.nextPrayerKey && (
-        <View style={styles.primaryCountdownBanner}>
-          <Ionicons name="time-outline" size={14} color={Colors.primary} />
-          <Text style={styles.primaryCountdownText}>
-            Next: <Text style={{ fontFamily: "Poppins_700Bold", color: Colors.primaryDark }}>{countdown.nextPrayerName}</Text> at {countdown.nextPrayerTimeFormatted}{" "}
-            <Text style={{ fontFamily: "Poppins_600SemiBold", color: countdown.isNow ? Colors.error : Colors.accent }}>
-              ({countdown.isNow ? "NOW" : `in ${countdown.formattedRemaining}`})
-            </Text>
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.primaryCardTimesRow}>
-        {(() => {
-          const isFriday = new Date().getDay() === 5;
-          const noonKey = isFriday ? "jummah" : "dhuhr";
-          const noonLabel = isFriday ? "Jummah" : "Dhuhr";
-          const noonTime = isFriday
-            ? (masjid.timetable.jummah || masjid.timetable.dhuhr)
-            : masjid.timetable.dhuhr;
-
-          return [
-            { key: "fajr", label: "Fajr", time: masjid.timetable.fajr },
-            { key: noonKey, label: noonLabel, time: noonTime },
-            { key: "asr", label: "Asr", time: masjid.timetable.asr },
-            { key: "maghrib", label: "Maghrib", time: masjid.timetable.maghrib },
-            { key: "isha", label: "Isha", time: masjid.timetable.isha },
-          ].map((item) => {
-            const isNext = countdown.nextPrayerKey === item.key;
-            return (
-              <View
-                key={item.key}
-                style={[
-                  styles.primaryCardTimeItem,
-                  isNext && styles.primaryCardTimeItemActive,
-                ]}
-              >
-                <Text style={[styles.primaryCardTimeLabel, isNext && styles.primaryCardTimeLabelActive]}>
-                  {item.label}
-                </Text>
-                <Text style={[styles.primaryCardTimeValue, isNext && styles.primaryCardTimeValueActive]}>
-                  {formatTimeCompact(item.time)}
-                </Text>
-              </View>
-            );
-          });
-        })()}
-      </View>
-    </Pressable>
-  );
-}
-
-export default function ExploreScreen() {
-  const { t } = useLanguage();
+export default function HomeDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { primaryMasjid, primaryMasjidId, openSelectModal, refreshPrimaryMasjid } = usePrimaryMasjid();
-  const {
-    selectedCity,
-    selectedState,
-    selectedSubDivision,
-    locations,
-    openLocationModal,
-    selectLocation,
-    selectSubDivision
-  } = useLocation();
-  const [masjids, setMasjids] = useState<Masjid[]>([]);
-  const [events, setEvents] = useState<AppEvent[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const { primaryMasjid, openSelectModal } = usePrimaryMasjid();
+  const { selectedCity, selectedState, openLocationModal } = useLocation();
+
   const [refreshing, setRefreshing] = useState(false);
-  const [lastDocSnap, setLastDocSnap] = useState<QueryDocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [amalModalVisible, setAmalModalVisible] = useState(false);
+  const [alarmModalVisible, setAlarmModalVisible] = useState(false);
+  const [completedAmalCount, setCompletedAmalCount] = useState(0);
 
-  const configuredCitiesSet = useMemo(() => {
-    const set = new Set<string>();
-    locations.forEach((loc) => {
-      loc.cities.forEach((c) => set.add(c.trim().toLowerCase()));
-    });
-    return set;
-  }, [locations]);
+  // Masjids list state
+  const [masjids, setMasjids] = useState<Masjid[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedSubDivision, setSelectedSubDivision] = useState<string | null>(null);
+  const [loadingMasjids, setLoadingMasjids] = useState(false);
 
-  const isCityFilterActive = Boolean(
-    selectedCity &&
-    selectedCity.toLowerCase() !== "all" &&
-    selectedCity.toLowerCase() !== "all cities" &&
-    selectedCity.toLowerCase() !== "all states"
-  );
-
-  const availableSubDivisions = useMemo(() => {
-    if (!isCityFilterActive || !selectedCity) {
-      return [];
-    }
-
-    const targetCity = selectedCity.trim().toLowerCase();
-    const list: string[] = [];
-
-    locations.forEach((loc) => {
-      (loc.districts || []).forEach((d) => {
-        if (
-          d.name.trim().toLowerCase() === targetCity ||
-          d.id.trim().toLowerCase() === targetCity
-        ) {
-          (d.subDivisions || []).forEach((s) => {
-            if (!list.includes(s)) list.push(s);
-          });
-        }
-      });
-    });
-
-    return list;
-  }, [locations, selectedCity, isCityFilterActive]);
-
+  // First time launch check
   useEffect(() => {
-    if (selectedSubDivision && !availableSubDivisions.includes(selectedSubDivision)) {
-      void selectSubDivision(null);
+    async function checkOnboarding() {
+      const completed = await hasCompletedOnboarding();
+      if (!completed) {
+        router.replace("/welcome");
+      }
     }
-  }, [selectedSubDivision, availableSubDivisions, selectSubDivision]);
+    void checkOnboarding();
+  }, []);
 
-  const loadInitialData = useCallback(async () => {
+  // Load Masjids from database
+  const loadMasjids = useCallback(async () => {
+    setLoadingMasjids(true);
     try {
-      setLoading(true);
-      const [allMasjidsData, eventsData] = await Promise.all([
-        getAllMasjids(),
-        getGlobalEvents(),
-        refreshPrimaryMasjid(),
-      ]);
-
-      setMasjids(allMasjidsData);
-      setEvents(eventsData);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      showCustomAlert("Error", "Failed to load data. Please try again.");
+      const data = await getAllMasjids();
+      setMasjids(data);
+    } catch (e) {
+      console.error("Failed to load masjids:", e);
     } finally {
-      setLoading(false);
+      setLoadingMasjids(false);
     }
-  }, [refreshPrimaryMasjid]);
+  }, []);
 
-  // Load data on mount & focus
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    void loadMasjids();
+  }, [loadMasjids]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadInitialData();
-    }, [loadInitialData])
-  );
+  // Load Amal Progress
+  const refreshAmal = useCallback(async () => {
+    const ids = await getCompletedAmal();
+    setCompletedAmalCount(ids.length);
+  }, []);
+
+  useEffect(() => {
+    void refreshAmal();
+  }, [refreshAmal]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadInitialData();
+    await Promise.all([refreshAmal(), loadMasjids()]);
     setRefreshing(false);
   };
 
-  const [sortBy, setSortBy] = useState<"earliest" | "alphabetical">("earliest");
-
-  const filteredMasjids = useMemo(() => {
-    let result = [...masjids];
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter((m) =>
-        fuzzyMatch(`${m.name} ${m.city || ""} ${m.subDivision || ""} ${m.address || ""}`, q)
-      );
-    }
-
-    if (isCityFilterActive && selectedCity) {
-      const targetCity = selectedCity.trim().toLowerCase();
-      result = result.filter((m) => {
-        const mCity = m.city ? m.city.trim().toLowerCase() : "";
-        if (targetCity === "other") {
-          return !mCity || (configuredCitiesSet ? !configuredCitiesSet.has(mCity) : false);
+  // Sub-divisions dynamically extracted from masjids
+  const subDivisions = useMemo(() => {
+    const subs = new Set<string>();
+    masjids.forEach((m) => {
+      if (m.subDivision) {
+        if (!selectedCity || (m.city && m.city.toLowerCase().includes(selectedCity.toLowerCase()))) {
+          subs.add(m.subDivision);
         }
-        return mCity === targetCity;
-      });
+      }
+    });
+    return Array.from(subs);
+  }, [masjids, selectedCity]);
+
+  // Filtered masjids list
+  const filteredMasjids = useMemo(() => {
+    return masjids.filter((m) => {
+      if (selectedCity && m.city && !m.city.toLowerCase().includes(selectedCity.toLowerCase()) && !selectedCity.toLowerCase().includes(m.city.toLowerCase())) {
+        return false;
+      }
+      if (selectedSubDivision && m.subDivision !== selectedSubDivision) {
+        return false;
+      }
+      if (search.trim()) {
+        return (
+          fuzzyMatch(search, m.name) ||
+          (m.address && fuzzyMatch(search, m.address)) ||
+          (m.subDivision && fuzzyMatch(search, m.subDivision))
+        );
+      }
+      return true;
+    });
+  }, [masjids, selectedCity, selectedSubDivision, search]);
+
+  // Timetable from Primary Masjid
+  const now = moment();
+  const isFriday = now.day() === 5;
+
+  const timetable = useMemo(() => {
+    if (primaryMasjid?.timetable) {
+      return primaryMasjid.timetable;
     }
+    return {
+      fajr: "05:03",
+      dhuhr: "11:58",
+      asr: "15:55",
+      maghrib: "17:35",
+      isha: "18:52",
+      jummah: "12:30",
+    };
+  }, [primaryMasjid]);
 
-    if (selectedSubDivision) {
-      const targetSub = selectedSubDivision.trim().toLowerCase();
-      result = result.filter((m) => {
-        const mSub = m.subDivision ? m.subDivision.trim().toLowerCase() : "";
-        return mSub === targetSub || m.name.toLowerCase().includes(targetSub) || (m.address || "").toLowerCase().includes(targetSub);
-      });
-    }
+  const countdown = usePrayerCountdown(timetable);
 
-    const now = new Date();
-    if (sortBy === "earliest") {
-      result.sort((a, b) => {
-        const detailA = getUpcomingPrayerDetails(a.timetable, now);
-        const detailB = getUpcomingPrayerDetails(b.timetable, now);
-        return detailA.remainingSeconds - detailB.remainingSeconds;
-      });
-    } else {
-      result.sort((a, b) => a.name.localeCompare(b.name));
-    }
+  // Date strings
+  const gregorianStr = now.format("ddd, D MMM YYYY");
+  const hijriStr = `${now.format("iMMMM")} ${now.iDate()}, ${now.iYear()} AH`;
 
-    return result;
-  }, [masjids, search, selectedCity, selectedSubDivision, isCityFilterActive, configuredCitiesSet, sortBy]);
+  const locationTitle = selectedCity
+    ? selectedCity.includes(",")
+      ? selectedCity
+      : `${selectedCity}, ${selectedState || "UP"}`
+    : "Tanda, Rampur";
 
-  const webTopInset = Platform.OS === "web" ? 67 : 0;
+  // 5 Daily Namaaz Slots ONLY (sunrise removed as requested)
+  const fivePrayerSlots = [
+    { key: "fajr", label: "Fajr", time: timetable.fajr || "05:03" },
+    {
+      key: isFriday ? "jummah" : "dhuhr",
+      label: isFriday ? "Jummah" : "Dhuhr",
+      time: isFriday ? (timetable.jummah || timetable.dhuhr || "12:30") : (timetable.dhuhr || "11:58"),
+    },
+    { key: "asr", label: "Asr", time: timetable.asr || "15:55" },
+    { key: "maghrib", label: "Maghrib", time: timetable.maghrib || "17:35" },
+    { key: "isha", label: "Isha", time: timetable.isha || "18:52" },
+  ];
+
+  const currentNextKey = countdown.nextPrayerKey || (isFriday ? "jummah" : "dhuhr");
+
+  // 8 Islamic Tools Grid
+  const islamicTools = [
+    {
+      id: "quran",
+      title: "Quran",
+      icon: "book",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/(tabs)/quran"),
+    },
+    {
+      id: "duas",
+      title: "Duas",
+      icon: "hand-left",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/duas"),
+    },
+    {
+      id: "qibla",
+      title: "Qibla",
+      icon: "compass",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/qibla"),
+    },
+    {
+      id: "nearby",
+      title: "Nearby",
+      icon: "location",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/nearby-masjids"),
+    },
+    {
+      id: "tasbih",
+      title: "Tasbih",
+      icon: "ellipse",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/tasbih"),
+    },
+    {
+      id: "calendar",
+      title: "Calendar",
+      icon: "calendar",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/(tabs)/calendar"),
+    },
+    {
+      id: "fasting",
+      title: "Fasting",
+      icon: "moon",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/fasting"),
+    },
+    {
+      id: "admin",
+      title: "My Masjid",
+      icon: "key",
+      iconColor: Colors.primary,
+      onPress: () => router.push("/(tabs)/admin"),
+    },
+  ];
+
+  // Amal Progress %
+  const amalProgress = Math.round((completedAmalCount / DEFAULT_AMAL_LIST.length) * 100);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + webTopInset }]}>
-      <View style={styles.headerSection}>
-        <View style={styles.greetingRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{t('assalamu_alaikum')}</Text>
-            <Pressable
-              style={styles.locationChip}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                openLocationModal();
-              }}
-            >
-              <Ionicons name="location" size={13} color={Colors.primary} />
-              <Text style={styles.locationChipText} numberOfLines={1}>
-                {selectedCity || "All Cities"}
-              </Text>
-              <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
-            </Pressable>
-          </View>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" backgroundColor={Colors.background} />
 
-          <Pressable
-            style={styles.headerDropdownSelectBox}
+      {/* Top Header: Location & Dates on Left, Bell & Profile on Right */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            openLocationModal();
+          }}
+          activeOpacity={0.7}
+          style={styles.locationContainer}
+        >
+          <View style={styles.locationTitleRow}>
+            <Ionicons name="location" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
+            <Text style={styles.locationTitle} numberOfLines={1}>
+              {locationTitle}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} style={{ marginLeft: 2 }} />
+          </View>
+          <Text style={styles.hijriDateSubtitle}>{hijriStr}</Text>
+          <Text style={styles.gregorianDateSubtitle}>{gregorianStr}</Text>
+        </TouchableOpacity>
+
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              openSelectModal();
+              setAlarmModalVisible(true);
             }}
+            style={styles.headerIconBtn}
           >
-            <Ionicons name="star" size={13} color={primaryMasjid ? Colors.accent : Colors.textMuted} />
-            <Text style={styles.headerDropdownSelectText} numberOfLines={1}>
-              {primaryMasjid ? primaryMasjid.name : "Select Primary"}
-            </Text>
-            <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
-          </Pressable>
+            <Ionicons name="notifications" size={19} color="#1A2E1A" />
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(tabs)/admin");
+            }}
+            style={[styles.headerIconBtn, styles.avatarBtn]}
+          >
+            <Ionicons name="key-outline" size={18} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
-        <Text style={styles.title}>{t('find_prayer_times')}</Text>
       </View>
 
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={t('search_masjids')}
-          placeholderTextColor="#7D8A8A"
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {search.length > 0 ? (
-          <Ionicons
-            name="close-circle"
-            size={18}
-            color={Colors.textMuted}
-            onPress={() => setSearch("")}
-          />
-        ) : (
-          <VoiceSearchButton onTranscript={setSearch} size={22} color={Colors.textMuted} />
-        )}
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
+      >
+        {/* Hero Next Prayer Gradient Card with Primary Masjid Namaz Time */}
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/prayer-times");
+          }}
+          style={styles.heroCardTouch}
+        >
+          <LinearGradient
+            colors={["#14A3A8", "#0D7377", "#095456"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroPrayerCard}
+          >
+            <View style={styles.heroContentRow}>
+              {/* Left side: Primary Masjid badge, Next Prayer Name & Time */}
+              <View style={styles.heroLeftCol}>
+                <View style={styles.heroNextHeaderTag}>
+                  <Text style={styles.heroNextLabel} numberOfLines={1}>
+                    {primaryMasjid ? primaryMasjid.name : "Next Prayer"}
+                  </Text>
+                  {primaryMasjid && (
+                    <Ionicons name="star" size={12} color="#FFD700" style={{ marginLeft: 4 }} />
+                  )}
+                </View>
+                <Text style={styles.heroPrayerName}>
+                  {countdown.nextPrayerName || (isFriday ? "Jummah" : "Dhuhr")}
+                </Text>
+                <Text style={styles.heroPrayerTime}>
+                  {countdown.nextPrayerTimeFormatted || timetable.dhuhr || "11:58"}
+                </Text>
+                {primaryMasjid ? (
+                  <Text style={styles.heroMasjidSub} numberOfLines={1}>
+                    {primaryMasjid.subDivision ? `${primaryMasjid.subDivision}, ` : ""}{primaryMasjid.city}
+                  </Text>
+                ) : (
+                  <Text style={styles.heroMasjidSub}>Standard Timetable</Text>
+                )}
+              </View>
 
-      {availableSubDivisions.length > 0 && (
-        <View style={styles.subDivisionRow}>
+              {/* Right side: Circular Countdown Ring */}
+              <View style={styles.heroRightCol}>
+                <View style={styles.countdownRingWrap}>
+                  <Svg width={96} height={96} viewBox="0 0 96 96">
+                    {/* Background track */}
+                    <Circle
+                      cx="48"
+                      cy="48"
+                      r="40"
+                      stroke="#FFFFFF"
+                      strokeWidth="5"
+                      strokeOpacity="0.25"
+                      fill="none"
+                    />
+                    {/* Progress active arc */}
+                    <Circle
+                      cx="48"
+                      cy="48"
+                      r="40"
+                      stroke="#FFFFFF"
+                      strokeWidth="5"
+                      strokeDasharray="180 250"
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </Svg>
+                  <View style={styles.countdownCenterTextWrap}>
+                    <Text style={styles.countdownInLabel}>
+                      {countdown.isNow ? "PRAYER" : "in"}
+                    </Text>
+                    <Text style={styles.countdownInText}>
+                      {countdown.isNow ? "NOW" : (countdown.formattedRemaining.split(" ").slice(0, 2).join(" ") || "10m 42s")}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Horizontal 5 Prayer Times Bar (Sunrise removed, 5 prayers only) */}
+        <View style={styles.horizontalPrayerCard}>
+          {fivePrayerSlots.map((slot) => {
+            const isActive = slot.key === currentNextKey;
+            return (
+              <View
+                key={slot.key}
+                style={[
+                  styles.prayerSlotBox,
+                  isActive && styles.prayerSlotBoxActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.slotLabel,
+                    isActive && styles.slotLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {slot.label}
+                </Text>
+                <Text
+                  style={[
+                    styles.slotTime,
+                    isActive && styles.slotTimeActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {slot.time}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* 8-Tool Quick Action Grid */}
+        <View style={styles.toolsGrid}>
+          {islamicTools.map((tool) => (
+            <TouchableOpacity
+              key={tool.id}
+              style={styles.toolTile}
+              activeOpacity={0.75}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                tool.onPress();
+              }}
+            >
+              <View style={styles.toolIconWrap}>
+                <Ionicons name={tool.icon as any} size={22} color={tool.iconColor || Colors.primary} />
+              </View>
+              <Text style={styles.toolTileTitle}>{tool.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* "Today's Amal" Card */}
+        <TouchableOpacity
+          style={styles.amalCard}
+          activeOpacity={0.88}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setAmalModalVisible(true);
+          }}
+        >
+          <View style={styles.amalLeftIconWrap}>
+            <Ionicons name="sparkles" size={20} color={Colors.accent} />
+          </View>
+
+          <View style={styles.amalCenterWrap}>
+            <Text style={styles.amalTitle}>Today's Amal</Text>
+            <View style={styles.amalProgressRow}>
+              <Text style={styles.amalCounterText}>
+                {completedAmalCount}/{DEFAULT_AMAL_LIST.length}
+              </Text>
+              <View style={styles.amalProgressBarTrack}>
+                <View style={[styles.amalProgressBarFill, { width: `${amalProgress}%` }]} />
+              </View>
+            </View>
+          </View>
+
+          <Ionicons name="chevron-forward" size={18} color="#8A998A" />
+        </TouchableOpacity>
+
+        {/* Primary Masjid Selection Card */}
+        <View style={styles.primaryMasjidCard}>
+          <View style={styles.primaryMasjidHeader}>
+            <View style={styles.primaryMasjidBadge}>
+              <Ionicons name="star" size={13} color="#D4A843" />
+              <Text style={styles.primaryMasjidBadgeText}>PRIMARY MASJID</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openSelectModal();
+              }}
+              style={styles.changePrimaryBtn}
+            >
+              <Ionicons name="swap-horizontal" size={13} color={Colors.primary} />
+              <Text style={styles.changePrimaryText}>
+                {primaryMasjid ? "Change" : "Select"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {primaryMasjid ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push(`/masjid/${primaryMasjid.id}`);
+              }}
+              style={styles.primaryMasjidBody}
+            >
+              <View style={styles.primaryMasjidIconWrap}>
+                <Ionicons name="business" size={22} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.primaryMasjidName} numberOfLines={1}>
+                  {primaryMasjid.name}
+                </Text>
+                <Text style={styles.primaryMasjidLocation} numberOfLines={1}>
+                  {primaryMasjid.subDivision ? `${primaryMasjid.subDivision}, ` : ""}
+                  {primaryMasjid.city || "Local Area"} • Tap for full timetable
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openSelectModal();
+              }}
+              style={styles.noPrimaryBanner}
+            >
+              <View style={styles.noPrimaryIconWrap}>
+                <Ionicons name="location-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.noPrimaryTitle}>Set Your Primary Masjid</Text>
+                <Text style={styles.noPrimarySub}>Tap to select your local masjid for verified prayer times</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Masjids Section */}
+        <View style={styles.masjidsSectionHeader}>
+          <View>
+            <Text style={styles.masjidsSectionTitle}>
+              Masjids in {selectedCity || "Your City"}
+            </Text>
+            <Text style={styles.masjidsSectionSub}>
+              {filteredMasjids.length} {filteredMasjids.length === 1 ? "masjid" : "masjids"} available
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.viewAllBtn}
+            onPress={() => router.push("/nearby-masjids")}
+          >
+            <Text style={styles.viewAllText}>View Map</Text>
+            <Ionicons name="map-outline" size={14} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Input Row with Voice Search */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrap}>
+            <Ionicons name="search" size={18} color="#8A998A" style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search masjids, areas..."
+              placeholderTextColor="#8A998A"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")} style={{ padding: 4 }}>
+                <Ionicons name="close-circle" size={16} color="#8A998A" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <VoiceSearchButton onSearch={setSearch} />
+        </View>
+
+        {/* Sub-division / Mohalla Filters */}
+        {subDivisions.length > 0 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.subDivisionScroll}
+            contentContainerStyle={styles.subDivScroll}
           >
-            <Pressable
+            <TouchableOpacity
               style={[
-                styles.subDivisionChip,
-                !selectedSubDivision && styles.subDivisionChipActive,
+                styles.subDivChip,
+                !selectedSubDivision && styles.subDivChipActive,
               ]}
               onPress={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                void selectSubDivision(null);
+                setSelectedSubDivision(null);
               }}
             >
               <Text
                 style={[
-                  styles.subDivisionChipText,
-                  !selectedSubDivision && styles.subDivisionChipTextActive,
+                  styles.subDivChipText,
+                  !selectedSubDivision && styles.subDivChipTextActive,
                 ]}
               >
                 All Areas
               </Text>
-            </Pressable>
-
-            {availableSubDivisions.map((sub) => {
-              const isActive = selectedSubDivision === sub;
+            </TouchableOpacity>
+            {subDivisions.map((sub) => {
+              const isSelected = selectedSubDivision === sub;
               return (
-                <Pressable
+                <TouchableOpacity
                   key={sub}
                   style={[
-                    styles.subDivisionChip,
-                    isActive && styles.subDivisionChipActive,
+                    styles.subDivChip,
+                    isSelected && styles.subDivChipActive,
                   ]}
                   onPress={() => {
                     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    void selectSubDivision(isActive ? null : sub);
+                    setSelectedSubDivision(isSelected ? null : sub);
                   }}
                 >
                   <Text
                     style={[
-                      styles.subDivisionChipText,
-                      isActive && styles.subDivisionChipTextActive,
+                      styles.subDivChipText,
+                      isSelected && styles.subDivChipTextActive,
                     ]}
                   >
                     {sub}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
-        </View>
-      )}
-      {loading ? (
-        <ExploreSkeleton />
-      ) : (
-        <FlatList
-          data={filteredMasjids}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            return (
+        )}
+
+        {/* Dynamic Masjid List */}
+        {loadingMasjids ? (
+          <View style={styles.masjidsLoadingWrap}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadingText}>Loading masjids...</Text>
+          </View>
+        ) : filteredMasjids.length === 0 ? (
+          <View style={styles.emptyMasjidsWrap}>
+            <Ionicons name="search-outline" size={32} color="#B0BEC5" />
+            <Text style={styles.emptyMasjidsTitle}>No Masjids Found</Text>
+            <Text style={styles.emptyMasjidsSub}>
+              {search.trim()
+                ? `No results matching "${search}"`
+                : "No masjids recorded in this location yet"}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.masjidsListWrap}>
+            {filteredMasjids.map((m) => (
               <MasjidCard
-                masjid={item}
-                isPrimary={item.id === primaryMasjidId}
-                onPress={() =>
-                  router.push({
-                    pathname: "/masjid/[id]",
-                    params: { id: item.id },
-                  })
-                }
+                key={m.id}
+                masjid={m}
+                onPress={() => router.push(`/masjid/${m.id}`)}
+                isPrimary={m.id === primaryMasjid?.id}
               />
-            );
-          }}
-          contentContainerStyle={[
-            styles.list,
-            { paddingBottom: insets.bottom + 130 },
-          ]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
-          }
-          ListHeaderComponent={
-            <View style={{ marginBottom: 8 }}>
-              {primaryMasjid && primaryMasjid.timetable ? (
-                <PrimaryMasjidCardView
-                  masjid={primaryMasjid}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/masjid/[id]",
-                      params: { id: primaryMasjid.id },
-                    })
-                  }
-                />
-              ) : null}
+            ))}
+          </View>
+        )}
 
-              {events.length > 0 ? (
-                <View style={styles.eventsContainer}>
-                  <Text style={styles.subSectionTitle}>Announcements</Text>
-                  {events.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))}
-                </View>
-              ) : null}
+        <View style={{ height: Math.max(insets.bottom, 16) + 100 }} />
+      </ScrollView>
 
-              <View style={styles.exploreHeaderRow}>
-                <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
-                  <Text style={[styles.subSectionTitle, { marginTop: 0, marginBottom: 2 }]} numberOfLines={1} ellipsizeMode="tail">
-                    {isCityFilterActive
-                      ? `Masjids in ${selectedCity} (${filteredMasjids.length})`
-                      : `All Registered Masjids (${filteredMasjids.length})`}
-                  </Text>
-                  <Text style={styles.sortSubtext} numberOfLines={1} ellipsizeMode="tail">
-                    {sortBy === "earliest"
-                      ? "Sorted by earliest Jamat"
-                      : "Sorted alphabetically"}
-                  </Text>
-                </View>
+      {/* Interactive Amal Tracker Modal */}
+      <AmalTrackerModal
+        visible={amalModalVisible}
+        onClose={() => setAmalModalVisible(false)}
+        onUpdateCount={(completed) => setCompletedAmalCount(completed)}
+      />
 
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.sortBtn,
-                      pressed && styles.btnPressed,
-                    ]}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSortBy(sortBy === "earliest" ? "alphabetical" : "earliest");
-                    }}
-                  >
-                    <Ionicons
-                      name={sortBy === "earliest" ? "time-outline" : "text-outline"}
-                      size={13}
-                      color={Colors.primary}
-                    />
-                    <Text style={styles.sortBtnText} numberOfLines={1}>
-                      {sortBy === "earliest" ? "Earliest" : "A-Z"}
-                    </Text>
-                  </Pressable>
-
-                  {isCityFilterActive && (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.allCitiesBtn,
-                        pressed && styles.btnPressed,
-                      ]}
-                      onPress={() => {
-                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        void selectLocation("All Cities", "All States");
-                      }}
-                    >
-                      <Ionicons name="apps-outline" size={13} color={Colors.primary} style={{ marginRight: 2 }} />
-                      <Text style={styles.allCitiesBtnText} numberOfLines={1}>Show All</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="location-outline" size={36} color={Colors.primary} />
-              </View>
-              <Text style={styles.emptyTitle}>
-                {search
-                  ? `No masjids found matching "${search}"`
-                  : isCityFilterActive
-                    ? `No registered masjids in ${selectedCity}`
-                    : "No registered masjids found"}
-              </Text>
-              <Text style={styles.emptyText}>
-                {isCityFilterActive
-                  ? "Try selecting 'All Cities' to view all registered masjids across all locations."
-                  : "Try searching with a different keyword."}
-              </Text>
-              {isCityFilterActive && (
-                <Pressable
-                  style={styles.switchCityBtn}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    void selectLocation("All Cities", "All States");
-                  }}
-                >
-                  <Ionicons name="grid" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                  <Text style={styles.switchCityBtnText}>Show All Cities</Text>
-                </Pressable>
-              )}
-            </View>
-          }
-        />
-      )}
-      {/* <PremiumBannerAd inTabBar={true} /> */}
-    </View>
+      {/* Prayer Alarm Settings Modal */}
+      <PrayerAlarmSettingsModal
+        visible={alarmModalVisible}
+        onClose={() => setAlarmModalVisible(false)}
+        primaryMasjidName={primaryMasjid?.name}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerSection: {
+  topHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 10,
   },
-  // greetingRow: {
-  //   flexDirection: "row",
-  //   alignItems: "center",
-  //   justifyContent: "space-between",
-  //   gap: 10,
-  // },
-  locationChip: {
+  locationContainer: {
+    flex: 1,
+  },
+  locationTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
-    gap: 4,
   },
-  locationChipText: {
+  locationTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 16,
+    color: "#1A2E1A",
+  },
+  hijriDateSubtitle: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: "#5C6B5C",
+    marginTop: 2,
+  },
+  gregorianDateSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11.5,
+    color: "#8A998A",
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+  },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#F0F4EC",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  avatarBtn: {
+    backgroundColor: "#E8F5EE",
+  },
+  notificationDot: {
+    position: "absolute",
+    top: 9,
+    right: 9,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EF4444",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+  },
+  heroCardTouch: {
+    marginBottom: 14,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  heroPrayerCard: {
+    borderRadius: 20,
+    padding: 20,
+  },
+  heroContentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  heroLeftCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  heroNextHeaderTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  heroNextLabel: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 13,
-    color: Colors.primary,
+    color: "#B2DFDB",
   },
-  greeting: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  title: {
+  heroPrayerName: {
     fontFamily: "Poppins_700Bold",
-    fontSize: 26,
-    color: Colors.text,
+    fontSize: 24,
+    color: "#FFFFFF",
+  },
+  heroPrayerTime: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 28,
+    color: "#FFFFFF",
+    marginTop: -2,
+  },
+  heroMasjidSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11.5,
+    color: "#E0F2F1",
     marginTop: 2,
   },
-  searchContainer: {
+  heroRightCol: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countdownRingWrap: {
+    width: 96,
+    height: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  countdownCenterTextWrap: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countdownInLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 10,
+    color: "#E0F2F1",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  countdownInText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: "#FFFFFF",
+    marginTop: 1,
+  },
+  horizontalPrayerCard: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
+  },
+  prayerSlotBox: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: 12,
+    marginHorizontal: 2,
+  },
+  prayerSlotBoxActive: {
+    backgroundColor: "#E0F2F1",
+    borderWidth: 1,
+    borderColor: "#80CBC4",
+  },
+  slotLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 3,
+  },
+  slotLabelActive: {
+    color: Colors.primaryDark,
+    fontFamily: "Poppins_600SemiBold",
+  },
+  slotTime: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12.5,
+    color: "#1A2E1A",
+  },
+  slotTimeActive: {
+    color: Colors.primary,
+    fontFamily: "Poppins_600SemiBold",
+  },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    rowGap: 12,
+  },
+  toolTile: {
+    width: "23%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
+  },
+  toolIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#EAF4F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  toolTileTitle: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: "#1A2E1A",
+  },
+  amalCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 16,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: "#EAEFE8",
+    marginBottom: 14,
+  },
+  amalLeftIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  amalCenterWrap: {
+    flex: 1,
+  },
+  amalTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#1A2E1A",
+    marginBottom: 4,
+  },
+  amalProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  amalCounterText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  amalProgressBarTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E2ECE6",
+    overflow: "hidden",
+  },
+  amalProgressBarFill: {
+    height: "100%",
+    backgroundColor: Colors.primary,
+    borderRadius: 3,
+  },
+  primaryMasjidCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
+    marginBottom: 20,
+  },
+  primaryMasjidHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F4F1",
+  },
+  primaryMasjidBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  primaryMasjidBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: "#D4A843",
+    letterSpacing: 0.5,
+  },
+  changePrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "#EAF4F4",
+  },
+  changePrimaryText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  primaryMasjidBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  primaryMasjidIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EAF4F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryMasjidName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: "#1A2E1A",
+  },
+  primaryMasjidLocation: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  noPrimaryBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  noPrimaryIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#EAF4F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noPrimaryTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: "#1A2E1A",
+  },
+  noPrimarySub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  masjidsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  masjidsSectionTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 16,
+    color: "#1A2E1A",
+  },
+  masjidsSectionSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "#EAF4F4",
+  },
+  viewAllText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: Colors.primary,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    marginBottom: 12,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 10 : 7,
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
   },
   searchInput: {
     flex: 1,
     fontFamily: "Poppins_400Regular",
-    fontSize: 15,
-    color: Colors.text,
+    fontSize: 13,
+    color: "#1A2E1A",
     padding: 0,
   },
-  list: {
-    paddingHorizontal: 20,
-  },
-  eventsContainer: {
-    marginBottom: 16,
-  },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-    width: "100%",
-  },
-  emptyIconWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: Colors.overlay,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 17,
-    color: Colors.text,
-    textAlign: "center",
-    marginBottom: 6,
-  },
-  emptyText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  subSectionTitle: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 15,
-    color: Colors.textSecondary,
-    marginTop: 8,
-    marginBottom: 12,
-    letterSpacing: 0.3,
-  },
-  primaryCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-  },
-  primaryCardPressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.95,
-  },
-  primaryCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+  subDivScroll: {
+    gap: 8,
     paddingBottom: 12,
-    marginBottom: 12,
-  } as ViewStyle,
-  primaryCardIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  primaryCardInfo: {
-    flex: 1,
-  },
-  primaryCardLabel: {
-    fontFamily: "Poppins_700Bold",
-    fontSize: 10,
-    color: Colors.accent,
-    letterSpacing: 1,
-  },
-  primaryCardName: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 16,
-    color: Colors.text,
-    marginTop: -1,
-  },
-  primaryCountdownBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.overlay,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 12,
-  },
-  primaryCountdownText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 12,
-    color: Colors.text,
-  },
-  primaryCardTimesRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  primaryCardTimeItem: {
-    alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  primaryCardTimeItemActive: {
-    backgroundColor: Colors.overlay,
-  },
-  primaryCardTimeLabel: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  primaryCardTimeLabelActive: {
-    color: Colors.primary,
-    fontFamily: "Poppins_700Bold",
-  },
-  primaryCardTimeValue: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: Colors.primary,
-  },
-  primaryCardTimeValueActive: {
-    color: Colors.primaryDark,
-    fontFamily: "Poppins_700Bold",
-  },
-  greetingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    gap: 8,
-    flexWrap: "wrap",
-    marginBottom: 2,
-  },
-  headerDropdownSelectBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.borderLight,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 4,
-    maxWidth: 180,
-  },
-  headerDropdownSelectText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 10,
-    color: Colors.text,
-    flexShrink: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    height: "75%",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontFamily: "Poppins_700Bold",
-    fontSize: 18,
-    color: Colors.primary,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  modalSearchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0F2EB",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  modalSearchInput: {
-    flex: 1,
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: Colors.text,
-    marginLeft: 4,
-  },
-  modalClearItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  modalClearText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
-    color: Colors.error,
-  },
-  modalMasjidItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-    gap: 12,
-  },
-  modalMasjidIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: Colors.overlay,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalMasjidName: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
-    color: Colors.text,
-  },
-  modalMasjidCity: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  modalEmptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  modalEmptyText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: Colors.textMuted,
-    textAlign: "center",
-  },
-  exploreHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
-    marginBottom: 12,
-    gap: 8,
-  },
-  sortSubtext: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  sortBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.overlay,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: 4,
-    flexShrink: 0,
-  },
-  sortBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: Colors.primary,
-  },
-  btnPressed: {
-    opacity: 0.7,
-  },
-  allCitiesBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.overlay,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: 4,
-    flexShrink: 0,
-  },
-  allCitiesBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: Colors.primary,
-  },
-  switchCityBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 18,
-    alignSelf: "center",
-  },
-  switchCityBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
-    color: "#ffffff",
-  },
-  footerLoader: {
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  footerText: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  subDivisionRow: {
-    marginBottom: 12,
-  },
-  subDivisionScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  subDivisionChip: {
+  subDivChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: "#EAEFE8",
   },
-  subDivisionChipActive: {
+  subDivChipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  subDivisionChipText: {
+  subDivChipText: {
     fontFamily: "Poppins_500Medium",
     fontSize: 12,
     color: Colors.textSecondary,
   },
-  subDivisionChipTextActive: {
-    color: "#ffffff",
+  subDivChipTextActive: {
+    color: "#FFFFFF",
     fontFamily: "Poppins_600SemiBold",
+  },
+  masjidsListWrap: {
+    marginTop: 4,
+  },
+  masjidsLoadingWrap: {
+    paddingVertical: 30,
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  emptyMasjidsWrap: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
+    marginVertical: 8,
+  },
+  emptyMasjidsTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#1A2E1A",
+    marginTop: 8,
+  },
+  emptyMasjidsSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  masjidFooterCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#EAEFE8",
+  },
+  masjidFooterLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  masjidFooterTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: "#1A2E1A",
+  },
+  masjidFooterSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
 });

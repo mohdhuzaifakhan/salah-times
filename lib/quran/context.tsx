@@ -62,11 +62,6 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | number | null>(null);
 
   const loadUserData = async () => {
-    if (!auth.currentUser) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const [b, r, p, pb, lr] = await Promise.all([
@@ -90,16 +85,12 @@ export const QuranProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        loadUserData();
-      } else {
-        setBookmarks([]);
-        setRecentReadState(null);
-        setPageBookmarks([]);
-        setLastReadPageState(null);
-        setLoading(false);
-      }
+    // Load local data on initial mount immediately
+    void loadUserData();
+
+    const unsubscribe = onAuthStateChanged(auth, () => {
+      // Refresh and merge when auth state changes
+      void loadUserData();
     });
 
     return unsubscribe;

@@ -206,7 +206,7 @@ export default function QuranSearchScreen() {
               </TouchableOpacity>
             );
           }}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 24) + 60 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
